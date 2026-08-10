@@ -17,6 +17,15 @@ def _scorer_fn(query : str, document : str) -> float:
 transformer = pt.apply.doc_score(lambda row: _scorer_fn(row["query"], row["text"]))
 ```
 
+For instance, if you are using the sentence transformers API:
+```python
+from sentence_transformers import CrossEncoder
+model = CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2", max_length=256)
+def _scorer_fn(query : str, document : str) -> float:
+    model.predict([(query, document)])
+    return score
+```
+
 Once you have a transformer that works, you can, if appropriate built that into a Transformer class:
 
 ```python
@@ -26,14 +35,14 @@ class MyReranker(pt.Transformer):
         ...
 
     def transform(self, inp : pd.DataFrame) -> pd.DataFrame:
-        # validate that you have the correct inputs for columns
+        # validate that you have the correct inputs for columns. if you need extra columns, add them here.
         pt.validate.result_frame(inp, ["query", "docno", "text"])
         result = pta.DataFrameBuilder(['docno', 'score'])
 
         for qid, group in inp.groupby("qid"):
             query = group.iloc[0]["query"]
             docnos = group["scores"].tolist()
-            scores = ... # calculate all scores 
+            scores = ... # calculate all scores; you may want to push apply batching.
             result.extend({
                 'qid': qid, # automatically repeats to the length of this batch
                 'query': query, # ditto
