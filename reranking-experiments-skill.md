@@ -22,8 +22,7 @@ For instance, if you are using the sentence transformers API:
 from sentence_transformers import CrossEncoder
 model = CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2", max_length=256)
 def _scorer_fn(query : str, document : str) -> float:
-    model.predict([(query, document)])
-    return score
+    return model.predict([(query, document)])[0]
 ```
 
 Once you have a transformer that works, you can, if appropriate built that into a Transformer class:
