@@ -1,5 +1,5 @@
 ---
-name: msmarco-passage-experiments
+name: reranking-experiments-skills
 description: This skills shows how to conduct experiments that involve rerankers
 
 ---
