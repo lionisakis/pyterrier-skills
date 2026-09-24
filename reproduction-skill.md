@@ -44,11 +44,11 @@ than building a new index for a corpus.
 
 If you are developing a reranker, see the skills named reranking-experiments-skills.
 
-## 4. Evaluating
+## 4. Evaluating
 
 Use `pt.Experiment()` to evaluate the pipeline on the chose dataset, using the appropriate topics and qrels. pt.Experiment is described in the skills named reranking-experiments-skills. Refer to any skills that are appropriate to the chosen dataset.
 
-## 4. Reporting
+## 5. Reporting
 
 - If you have been given access to published numbers, keep **published** and **reproduced** figures in separate columns and never overwrite one with the other. Show the delta.
 - Distinguish **matching the numbers** from **reproducing the claim**. A run can land within 0.01 of every
