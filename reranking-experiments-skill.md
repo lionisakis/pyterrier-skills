@@ -59,7 +59,7 @@ Sparse:
  - from a Terrier index: `index.bm25()`
 
 Dense:
- - from a Dense index: ``model.query_encoder() >> index.np_retriever()` 
+ - from a Dense index: `model.query_encoder() >> index.np_retriever()` 
 
 
 ## 3. Adding text, if necessary
