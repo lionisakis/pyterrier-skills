@@ -75,7 +75,7 @@ If this is the case, then `retriever >> fetch_text` where `fetch_text`  is defin
  - from a dataset from ir_datasets: `fetch_text = pt.text.get_text(pt.get_dataset("irds:..."))`
  
 
-## 4. Evaluation
+## 4. Evaluation
 
 Use PyTerrier's experiment for comparing the reranker with the baseline.
 
