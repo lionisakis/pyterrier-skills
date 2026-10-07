@@ -1,0 +1,25 @@
+[project]
+name = "pyterrier-skills"
+version = "0.1.0"
+description = "Agent skills for developing with PyTerrier"
+requires-python = ">=3.10"
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "pyyaml>=6",
+    "pyterrier[all]>=1.1",
+    "sentence-transformers>=3",
+]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "run: executes a skill's `python run` blocks (needs the full dev group)",
+    "slow: also executes `python run slow` blocks (large downloads or a GPU)",
+]
+addopts = "--strict-markers -m 'not run and not slow'"
