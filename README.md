@@ -4,7 +4,22 @@ Agent skills for developing with [PyTerrier](https://github.com/terrier-org/pyte
 in the open [Agent Skills](https://agentskills.io/specification) format. They work with Claude Code,
 Cursor, Codex, Gemini CLI and other agents supported by the [`skills` CLI](https://github.com/vercel-labs/skills).
 
-> Status: no skills yet. This repository is private and not published.
+> Status: in progress. This repository is private and not published.
+
+## Skills
+
+Skills are organised by pipeline stage. `pyterrier-basics` is the base skill: install it with any of the others.
+
+| Skill | Covers | Status |
+|---|---|---|
+| `pyterrier-basics` | how PyTerrier works, install, data model, operators, `pt.apply`, custom transformers, legacy → 1.x, building a pipeline | done |
+| `pyterrier-experiments` | datasets, `pt.Experiment`, significance, benchmark conventions, SuiteEval, tuning | planned |
+| `pyterrier-huggingface` | finding, loading and sharing prebuilt indexes and caches | planned |
+| `pyterrier-first-stage` | Terrier, PISA, SPLADE, dense retrieval, ColBERT v2, fusion | planned |
+| `pyterrier-expansion` | query rewriting, PRF, document expansion (doc2query) | planned |
+| `pyterrier-reranking` | cross-encoders, T5, monoELECTRA, LLM rerankers, learning to rank | planned |
+| `pyterrier-rag` | retrieval-augmented generation | planned |
+| `pyterrier-caching` | caching expensive pipeline stages | planned |
 
 ## Install locally
 

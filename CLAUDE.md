@@ -9,7 +9,9 @@ and its extensions. Skills follow the open [Agent Skills](https://agentskills.io
 are installed locally with the cross-agent `npx skills` CLI. There is no plugin marketplace and nothing is
 published. `pyproject.toml` only defines the dev environment and the test suite that checks skills.
 
-`skills/` is currently empty: the first skills have not been written yet.
+Skills are organised by pipeline stage (see the table in README.md). `pyterrier-basics` is the base skill:
+every other skill opens with "Assumes the `pyterrier-basics` skill." and does not repeat its content
+(install, data model, operators, legacy → 1.x).
 
 ## Layout
 
@@ -62,6 +64,9 @@ command after editing a skill. `-g` installs for the user instead of the project
 - When an agent gets something wrong in testing, add one concrete correction to the Don't list or
   Troubleshooting table rather than another paragraph.
 - Refer to other skills by name, never by a relative path into another skill's folder.
+- Write the `description` in the third person: what the skill covers and when to use it, with trigger
+  keywords and a "Not for …" clause where another skill is a near miss. Don't summarise the steps.
+- Code in `references/` is not executed by the tests. Run it yourself before committing.
 
 ## PyTerrier content rules
 
@@ -79,8 +84,11 @@ command after editing a skill. `-g` installs for the user instead of the project
 - **Metric correctness over brevity.** For TREC DL, nDCG@10 uses graded labels and MAP/MRR binarise at
   rel >= 2; MS MARCO dev uses `RR@10` on binary labels. BM25 defaults differ: Terrier k1 1.2, b 0.75;
   Anserini MS MARCO 0.82, 0.68; PISA 0.9, 0.4.
-- **Reproductions report faithfully:** separate published and reproduced columns, never adjust evaluation
-  to move results, record assumptions.
+- **Report faithfully:** when comparing with published numbers, show them in a separate column with the
+  difference, never adjust evaluation to move results, and record assumptions. Skills teach how to create
+  pipelines and experiments; none is framed as reproducing a paper.
+- **Parameter defaults live in `references/` only**, with an instruction to verify them against the installed
+  source, the index metadata or the paper.
 
 ## Removed first-draft skills
 
