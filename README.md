@@ -16,7 +16,7 @@ Skills are organised by pipeline stage. `pyterrier-basics` is the base skill: in
 | `pyterrier-experiments` | datasets, `pt.Experiment`, significance, benchmark conventions, SuiteEval, tuning | done |
 | `pyterrier-huggingface` | finding, loading and sharing prebuilt indexes and caches | done |
 | `pyterrier-first-stage` | Terrier, PISA, SPLADE, dense retrieval, ColBERT v2, fusion | done |
-| `pyterrier-expansion` | query rewriting, PRF, document expansion (doc2query) | planned |
+| `pyterrier-expansion` | query rewriting, PRF, document expansion (doc2query) | done |
 | `pyterrier-reranking` | cross-encoders, T5, monoELECTRA, LLM rerankers, learning to rank | done |
 | `pyterrier-rag` | retrieval-augmented generation | planned |
 | `pyterrier-caching` | caching expensive pipeline stages | done |
