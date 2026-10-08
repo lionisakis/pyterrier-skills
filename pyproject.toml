@@ -11,6 +11,10 @@ dev = [
     "pyyaml>=6",
     "pyterrier[all]>=1.1",
     "sentence-transformers>=3",
+    "pyterrier-pisa>=0.4.7",
+    "pyterrier-dr>=0.8",
+    "pyterrier-splade>=0.1",
+    "pyterrier-alpha>=0.16",
 ]
 
 [tool.uv]
