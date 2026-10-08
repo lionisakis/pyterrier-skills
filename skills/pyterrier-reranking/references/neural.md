@@ -70,14 +70,7 @@ See the `pyterrier-colbert` skill, which covers ColBERT as retriever, reranker a
 
 ## 5. Dense bi-encoder as a scorer
 
-A pyterrier-dr encoder given results with `query` and `text` scores them directly:
-
-```python
-import pyterrier_dr
-reranker = pyterrier_dr.TasB.dot()      # used as: first_stage % 100 >> dataset.text_loader() >> reranker
-```
-
-Bi-encoders are usually weaker rerankers than cross-encoders, but cheaper.
+See the `pyterrier-dense` skill, which covers pyterrier-dr models as retriever, reranker and PRF.
 
 ## 6. Speed
 

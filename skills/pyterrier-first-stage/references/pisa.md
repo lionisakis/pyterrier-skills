@@ -71,7 +71,7 @@ retriever = splade.query_encoder() >> index.quantized()
 
 - `toks_indexer(scale=100.0)` multiplies float weights by `scale` and rounds them to integers.
 - Use `stemmer="none"`. SPLADE terms are wordpieces and must not be stemmed.
-- For the full SPLADE setup, read [splade.md](splade.md).
+- For the full SPLADE setup, see the `pyterrier-splade` skill.
 
 ## 5. Errors
 

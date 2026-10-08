@@ -8,7 +8,8 @@ Checked against the source of pyterrier-dr 0.8.0 and pyterrier-alpha 0.16.5, wit
 3. Indexing
 4. Choosing a retriever
 5. Fusion with sparse retrieval
-6. Problems
+6. Pseudo-relevance feedback
+7. Problems
 
 ## 1. Install
 
@@ -91,7 +92,21 @@ normalised_sum = (
 - `PerQueryMaxMinScore` rescales each query's scores to 0–1 before they are added. Tune any weights on
   training topics.
 
-## 6. Problems
+## 6. Pseudo-relevance feedback
+
+Read from `pyterrier_dr/prf.py` in 0.8.0.
+
+| Class | Parameters (defaults) | New query vector |
+|---|---|---|
+| `VectorPrf` | `alpha=1`, `beta=0.2`, `k=3` | `alpha * query_vec + beta * mean(top-k doc_vec)` |
+| `AveragePrf` | `k=3` | `mean(query_vec, top-k doc_vec)` |
+
+- Both are keyword-only, read `query_vec` and `doc_vec`, and output one row per query with a new
+  `query_vec`. Put `index.vec_loader()` before them to add `doc_vec`, and a retriever after them.
+- Both cite Li et al. (TOIS 2023) on PRF for dense retrieval. Take `k`, `alpha` and `beta` from the paper
+  or tune them on training topics.
+
+## 7. Problems
 
 - The pyterrier-dr README uses `pt.TerrierRetrieve` (legacy). Use `index.bm25()` or `pt.terrier.Retriever`.
 - A how-to page uses `docid` where the column is `docno`.

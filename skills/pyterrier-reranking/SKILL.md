@@ -3,13 +3,14 @@ name: pyterrier-reranking
 description: >-
   Reranks PyTerrier first-stage results with neural and learned rerankers:
   cross-encoders (sentence-transformers CrossEncoder, monoELECTRA), monoT5 and
-  duoT5, ColBERT as a text scorer, dense bi-encoders as scorers, LLM listwise
-  rerankers (RankZephyr, RankGPT, LiT5 via pyterrier-generative), passage-level
-  scoring of long documents (sliding windows with max-passage aggregation), and
-  learning to rank with feature unions and LightGBM or scikit-learn. Use when
-  adding a reranker or second stage to a pipeline, choosing a rerank depth,
-  scoring query-document pairs, or training a learning-to-rank model in
-  PyTerrier. Not for first-stage retrieval, query expansion or evaluation.
+  duoT5, LLM listwise rerankers (RankZephyr, RankGPT, LiT5 via pyterrier-
+  generative), passage-level scoring of long documents (sliding windows with
+  max-passage aggregation), and learning to rank with feature unions and
+  LightGBM or scikit-learn. Use when adding a reranker or second stage to a
+  pipeline, choosing a rerank depth, scoring query-document pairs, or training a
+  learning-to-rank model in PyTerrier. Not for first-stage retrieval, query
+  expansion or evaluation. For SPLADE, dense or ColBERT as rerankers, use
+  pyterrier-splade, pyterrier-dense or pyterrier-colbert.
 compatibility: pyterrier>=1.1 (checked with 1.1.2, pyterrier-t5 0.3.0, pyterrier-dr 0.8.0, sentence-transformers 6.1, lightgbm, CPU only)
 ---
 
@@ -62,7 +63,8 @@ assert len(reranked) == 20 and reranked["rank"].min() == 0
 | monoT5 (`pyterrier_t5.MonoT5ReRanker()`) | strong pointwise T5 reranker | `pyterrier-t5` | 100–1000 |
 | duoT5 (`pyterrier_t5.DuoT5ReRanker()`) | pairwise, after monoT5 on a small top-k | `pyterrier-t5` | 10–50 (cost grows with k²) |
 | ColBERT text scorer | late interaction without an index | `pyterrier_colbert2`; see the `pyterrier-colbert` skill | 100–1000 |
-| Dense bi-encoder as scorer (`model` from pyterrier-dr) | cheap, reuses a dense model | `pyterrier-dr` | 100–1000 |
+| Dense bi-encoder as scorer (`model` from pyterrier-dr) | cheap, reuses a dense model | `pyterrier-dr`; see the `pyterrier-dense` skill | 100–1000 |
+| SPLADE scorer (`splade.scorer()`) | learned sparse, without an index | `pyterrier-splade`; see the `pyterrier-splade` skill | 100–1000 |
 | LLM listwise (RankZephyr, RankGPT, LiT5) | strongest, most expensive; GPU or API key. **0.1.3 doesn't import with released dependencies; check first** | `pyterrier-generative` | 20–100 |
 | Learning to rank | combine many hand-built features | core + `lightgbm` or scikit-learn | 100–1000 |
 
@@ -198,7 +200,7 @@ To run several rerankers or evaluations over the same candidates, cache the scor
 
 | Read | When |
 |---|---|
-| [references/neural.md](references/neural.md) | configuring cross-encoders, monoT5/duoT5, monoELECTRA or bi-encoder scorers |
+| [references/neural.md](references/neural.md) | configuring cross-encoders, monoT5/duoT5, or monoELECTRA |
 | [references/llm-rerankers.md](references/llm-rerankers.md) | using RankZephyr, RankVicuna, RankGPT, LiT5 or a custom LLM reranker |
 | [references/ltr.md](references/ltr.md) | building features and training learning-to-rank models |
 
