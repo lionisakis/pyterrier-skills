@@ -34,7 +34,7 @@ Check for a prebuilt index first (see the `pyterrier-huggingface` skill). Build 
 | Fast lexical retrieval on large corpora | PISA | `pyterrier-pisa` (Linux x86_64) | [references/pisa.md](references/pisa.md) |
 | Learned sparse retrieval | SPLADE, stored in PISA or Terrier | `pyterrier-splade` | [references/splade.md](references/splade.md) |
 | Dense (bi-encoder) retrieval | pyterrier-dr `FlexIndex` | `pyterrier-dr` | [references/dense.md](references/dense.md) |
-| Late interaction | ColBERT v2 / PLAID | `pyterrier_colbert2` (GPU) | [references/colbert2.md](references/colbert2.md) |
+| Late interaction | ColBERT v2 / PLAID | `pyterrier_colbert2` (GPU recommended; runs slowly on CPU) | [references/colbert2.md](references/colbert2.md) |
 | Sparse and dense together | reciprocal rank fusion | `pyterrier-alpha` | Fusion, below |
 
 Read the reference file for a backend before writing code for it.
