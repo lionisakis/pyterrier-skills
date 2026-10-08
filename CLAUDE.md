@@ -75,7 +75,8 @@ command after editing a skill. `-g` installs for the user instead of the project
   caching operator (use pyterrier-caching), `pyterrier.transformer.TransformerBase`.
 - **Do not copy doc snippets unchecked.** The official docs contain broken examples (wrong operator
   precedence on the operators page, missing commas in the tuning example, `docid` instead of `docno` in the
-  pyterrier-dr how-to, and others). Prove examples with `python run` blocks. (The tuning page's `"c"` control
+  pyterrier-dr how-to, `pt.validate.query_frame(input_columns, ...)` inside `transform(inp)` on the inspection
+  troubleshooting page, and others). Prove examples with `python run` blocks. (The tuning page's `"c"` control
   is not a bug: in Terrier 5.11 it sets the same BM25 `b` as `"bm25.b"`. Skills still use `"bm25.b"`.)
 - **Operator precedence follows Python:** `**` > `*` `%` > `+` > `>>` > `&` > `^` > `|`. Parenthesise `&`, `|`, `^`.
 - **Code is illustrative, not prescriptive.** Collection, topics, rerank depth and metrics come from the

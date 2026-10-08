@@ -18,6 +18,8 @@ Docs: [Installation](https://pyterrier.readthedocs.io/en/latest/installation.htm
 [Transformers](https://pyterrier.readthedocs.io/en/latest/transformer.html) ·
 [Operators](https://pyterrier.readthedocs.io/en/latest/operators.html) ·
 [pt.apply](https://pyterrier.readthedocs.io/en/latest/apply.html) ·
+[Input validation](https://pyterrier.readthedocs.io/en/latest/extending/validate.html) ·
+[Inspection troubleshooting](https://pyterrier.readthedocs.io/en/latest/troubleshooting/inspection.html) ·
 [Java troubleshooting](https://pyterrier.readthedocs.io/en/latest/troubleshooting/java.html)
 
 This is the base skill. The other pyterrier skills assume you know what is here.
@@ -152,14 +154,18 @@ assert len(reranked) == 50 and reranked["rank"].min() == 0
 ## Writing a custom transformer
 
 Use a `pt.Transformer` subclass when the component has state (a model or an index) or needs
-configuration. Use `pt.apply` for one-liners. The template below is a reranker:
+configuration. Use `pt.apply` for one-liners. A transformer has two contracts that PyTerrier
+reads off the class: its **input** (declared by validating it) and its **output** (declared by
+what it returns for an empty input). The template below is a reranker:
 
 ```python run
 class LengthReranker(pt.Transformer):
     """Scores each retrieved document by its text length."""
 
     def transform(self, inp):
-        pt.validate.result_frame(inp, extra_columns=["text"])   # clear error if text is missing
+        # Input contract: a result frame that also has `text`. Anything else raises InputValidationError.
+        pt.validate.result_frame(inp, extra_columns=["text"], context=self)
+        # Output contract: an empty input falls through and returns an empty frame with the output columns.
         out = pt.new.DataFrameBuilder(["qid", "query", "docno", "score"])
         for qid, group in inp.groupby("qid"):
             out.extend({
@@ -174,12 +180,42 @@ top = (bm25 % 10 >> index.text_loader() >> LengthReranker()).search("chemical re
 assert top.iloc[0]["rank"] == 0
 ```
 
-- Validate inputs with `pt.validate.result_frame(...)` for results or `pt.validate.query_frame(...)` for queries.
 - Build outputs with `pt.new.DataFrameBuilder` (in core since 1.1), and rank them with `pt.model.add_ranks`.
 - Score documents in batches inside `transform`. Don't call a model once per row.
+- This template keeps only the four columns it builds. To pass every input column through (what the
+  pyterrier-dr scorers do), use `pt.model.add_ranks(inp.assign(score=scores))` instead of the builder.
 
-For model-backed transformers, query rewriters, `transform_iter`, and making a transformer work with
-`pt.inspect`, read [references/custom-transformers.md](references/custom-transformers.md).
+### Declare the input and the output
+
+PyTerrier does not trust a transformer's docstring. It learns the contract by running the class:
+
+| Contract | You write | PyTerrier reads it with |
+|---|---|---|
+| Input | a `pt.validate.*` call as the first line of `transform`: `result_frame(inp, extra_columns=[...], context=self)` for results, `query_frame(...)` for queries, `document_frame(...)` for documents, `columns(inp, includes=[...], excludes=[...])` for anything else | `pt.inspect.transformer_inputs(t)`: calls `t` with an empty frame and reads the missing columns from the `InputValidationError` |
+| Output | a `transform` that, given an empty frame with valid columns, returns an empty frame with exactly the output columns. Never call the model on it | `pt.inspect.transformer_outputs(t, input_columns)`: calls `t.transform` with an empty frame of those columns |
+| Several accepted inputs | `with pt.validate.any(inp, context=self) as v:` with one `v.query_frame(..., mode="...")` or `v.result_frame(..., mode="...")` per mode, then branch on `v.mode`. pyterrier-dr's `BiEncoder` and `FlexIndex` work this way | the same two calls; `transformer_inputs` returns one list per mode |
+| `transform_iter` instead of `transform` | `inp = pt.utils.peekable(inp)` then `pt.validate.result_iter(inp, ...)`, **plus** a `transform_outputs(self, input_columns)` method that validates `input_columns` and returns the output list | `transform_outputs` is called instead of running the transformer |
+
+`pt.Experiment` runs this check on every pipeline against the topics' columns **before** executing
+anything (`validate="warn"` by default; pass `validate="error"` to stop). Pipeline schematics use
+the same information. Check a transformer the moment you write it:
+
+```python run
+reranker = LengthReranker()
+assert pt.inspect.transformer_inputs(reranker) == [["qid", "docno", "text"]]
+assert pt.inspect.transformer_outputs(reranker, ["qid", "query", "docno", "score", "rank", "text"]) \
+    == ["qid", "query", "docno", "score", "rank"]
+
+pipeline = bm25 % 10 >> index.text_loader() >> reranker
+assert "score" in pt.inspect.transformer_outputs(pipeline, ["qid", "query"])   # whole pipeline, no data needed
+
+# text_loader forgotten: strict=False returns None instead of raising InputValidationError
+assert pt.inspect.transformer_outputs(bm25 % 10 >> reranker, ["qid", "query"], strict=False) is None
+```
+
+For model-backed transformers, query rewriters, multi-mode transformers, `transform_iter`, `pt.apply`
+with `transform_outputs=`, and fixing a transformer that `pt.Experiment` reports as "could not be
+validated", read [references/custom-transformers.md](references/custom-transformers.md).
 
 ## Legacy → 1.x
 
@@ -246,6 +282,13 @@ pipeline = first_stage % k >> text_loader >> reranker
 - Don't give a reranker results that have no `text` column. Add `index.text_loader()` or `dataset.text_loader()` first.
 - Don't use numeric `qid` or `docno` values. They must be strings.
 - Don't score one row at a time with a neural model. Use `batch_size=` or batch inside `transform`.
+- Don't write `transform` without a `pt.validate.*` call as its first line. Without it PyTerrier can't tell what
+  the transformer needs, and a wrong input surfaces as a `KeyError` inside your code instead of an
+  `InputValidationError` at the pipeline boundary.
+- Don't run the model on an empty input, and don't return a frame with different columns for it.
+  `pt.inspect` and `pt.Experiment` pass an empty frame to learn the output columns.
+- Don't implement `transform_iter` without `transform_outputs`. Such a transformer can't be inspected.
+- Don't silence `pt.Experiment`'s validation report with `validate="ignore"`. Fix the transformer instead.
 - Don't copy snippets from the docs or READMEs unchecked. Some are broken or legacy. Run them first.
 - Don't call `.parallel()` without `pyterrier-alpha[parallel]` installed. It is experimental.
 
@@ -266,6 +309,10 @@ pipeline = first_stage % k >> text_loader >> reranker
 | `RuntimeError: You can only call <function legacy_init …>` | legacy `pt.init()` called after Java started | delete `pt.init()` (see Legacy → 1.x) |
 | `DeprecationWarning: Call to deprecated class BatchRetrieve` | legacy code | see the Legacy → 1.x table |
 | `KeyError: 'text'`, or `InputValidationError … missing_columns=['text']` | the reranker received results without document text | insert `index.text_loader()` or `dataset.text_loader()` before it |
+| `UserWarning: Experiment Pipeline Validation Report … failed validation` | a stage's input contract doesn't match the previous stage's output (usually a missing `text` or `query` column) | walk the pipeline with `pt.inspect.transformer_outputs(stage, cols)` to find the stage, then insert the missing loader or rewriter |
+| `… Validation Report … could not be validated` | a custom transformer isn't inspectable: no `pt.validate` call, it fails on an empty frame, or it has `transform_iter` without `transform_outputs` | apply the "Declare the input and the output" table. `validate="ignore"` only hides it |
+| `InspectError: This transformer is not inspectable` | `transform_iter` without `transform_outputs` | add `transform_outputs(self, input_columns)` (see the reference file) |
+| A custom transformer shows `?` in a pipeline schematic | same as above: inputs or outputs can't be determined | same fix |
 | Pipeline results look wrong after combining with `\|`, `&` or `+` | operator precedence | parenthesise. Print the pipeline (`print(pipe)`) to see its structure |
 | Results all come from one retriever after `\|` or `&` | set operators drop scores | rescore after the set operation, e.g. `(a \| b) >> scorer` |
 | Out of memory in Java on a large index | default JVM heap too small | `pt.java.set_memory_limit(16.0)` before Java starts |
