@@ -19,7 +19,7 @@ Skills are organised by pipeline stage. `pyterrier-basics` is the base skill: in
 | `pyterrier-expansion` | query rewriting, PRF, document expansion (doc2query) | planned |
 | `pyterrier-reranking` | cross-encoders, T5, monoELECTRA, LLM rerankers, learning to rank | done |
 | `pyterrier-rag` | retrieval-augmented generation | planned |
-| `pyterrier-caching` | caching expensive pipeline stages | planned |
+| `pyterrier-caching` | caching expensive pipeline stages | done |
 
 ## Install locally
 
