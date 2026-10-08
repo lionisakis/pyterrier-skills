@@ -61,7 +61,7 @@ assert len(reranked) == 20 and reranked["rank"].min() == 0
 | monoELECTRA (`pyterrier_dr.ElectraScorer()`) | strong passage cross-encoder | `pyterrier-dr` | 100–1000 |
 | monoT5 (`pyterrier_t5.MonoT5ReRanker()`) | strong pointwise T5 reranker | `pyterrier-t5` | 100–1000 |
 | duoT5 (`pyterrier_t5.DuoT5ReRanker()`) | pairwise, after monoT5 on a small top-k | `pyterrier-t5` | 10–50 (cost grows with k²) |
-| ColBERT text scorer | late interaction without an index | `pyterrier_colbert2` | 100–1000 |
+| ColBERT text scorer | late interaction without an index | `pyterrier_colbert2`; see the `pyterrier-colbert` skill | 100–1000 |
 | Dense bi-encoder as scorer (`model` from pyterrier-dr) | cheap, reuses a dense model | `pyterrier-dr` | 100–1000 |
 | LLM listwise (RankZephyr, RankGPT, LiT5) | strongest, most expensive; GPU or API key. **0.1.3 doesn't import with released dependencies; check first** | `pyterrier-generative` | 20–100 |
 | Learning to rank | combine many hand-built features | core + `lightgbm` or scikit-learn | 100–1000 |
@@ -198,7 +198,7 @@ To run several rerankers or evaluations over the same candidates, cache the scor
 
 | Read | When |
 |---|---|
-| [references/neural.md](references/neural.md) | configuring cross-encoders, monoT5/duoT5, monoELECTRA, ColBERT or bi-encoder scorers |
+| [references/neural.md](references/neural.md) | configuring cross-encoders, monoT5/duoT5, monoELECTRA or bi-encoder scorers |
 | [references/llm-rerankers.md](references/llm-rerankers.md) | using RankZephyr, RankVicuna, RankGPT, LiT5 or a custom LLM reranker |
 | [references/ltr.md](references/ltr.md) | building features and training learning-to-rank models |
 

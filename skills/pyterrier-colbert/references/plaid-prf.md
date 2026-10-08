@@ -1,7 +1,7 @@
 # PLAID-PRF (ColBERT v2 pseudo-relevance feedback)
 
 Read from pyterrier_colbert2 at commit `4947df6` (`pyterrier_colbert2/ranking/_prf.py`), and run on CPU
-over a 200-document index. See the `pyterrier-first-stage` skill for installing ColBERT v2.
+over a 200-document index. For installing ColBERT v2, see colbert2.md.
 
 ## Usage
 

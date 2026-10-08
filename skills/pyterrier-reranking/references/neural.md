@@ -1,7 +1,7 @@
 # Neural rerankers
 
-Checked with PyTerrier 1.1.2, pyterrier-t5 0.3.0, pyterrier-dr 0.8.0, sentence-transformers 6.1 and
-pyterrier_colbert2 (commit 4947df6), on CPU, each on one query with three vaswani documents.
+Checked with PyTerrier 1.1.2, pyterrier-t5 0.3.0, pyterrier-dr 0.8.0 and sentence-transformers 6.1,
+on CPU, each on one query with three vaswani documents.
 
 ## Contents
 1. sentence-transformers CrossEncoder
@@ -66,15 +66,7 @@ pipeline = first_stage % 100 >> dataset.text_loader() >> mono % 10 >> duo
 
 ## 4. ColBERT text scorer
 
-```python
-from pyterrier_colbert2.ranking import ColBERTModelOnlyFactory
-
-colbert = ColBERTModelOnlyFactory("colbert-ir/colbertv2.0")            # gpu=False for CPU
-reranker = colbert.text_scorer()
-```
-
-Install notes, including the `transformers<5` cap, are in the `pyterrier-first-stage` skill
-(references/colbert2.md there). Checked on CPU: the relevant document was ranked first.
+See the `pyterrier-colbert` skill, which covers ColBERT as retriever, reranker and PRF.
 
 ## 5. Dense bi-encoder as a scorer
 

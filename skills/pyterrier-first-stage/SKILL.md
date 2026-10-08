@@ -4,12 +4,11 @@ description: >-
   Builds and queries first-stage retrievers in PyTerrier: Terrier indexes and
   BM25/DPH/PL2 retrieval, PISA indexes, learned sparse retrieval with SPLADE,
   dense retrieval with pyterrier-dr (TAS-B, E5, RetroMAE, TCT-ColBERT and
-  FlexIndex with numpy, FAISS or HNSW retrievers), late interaction with ColBERT
-  v2 / PLAID, and hybrid fusion of sparse and dense results. Covers indexing
+  FlexIndex with numpy, FAISS or HNSW retrievers), and hybrid fusion of sparse and dense results. Covers indexing
   options, metadata lengths, stemming, retriever parameters and choosing a
   backend. Use when indexing a corpus, choosing or configuring a retriever, or
   combining retrievers in PyTerrier. Not for reranking, query expansion or
-  evaluation.
+  evaluation. For ColBERT, use pyterrier-colbert.
 compatibility: pyterrier>=1.1 (checked with 1.1.2, pyterrier-pisa 0.4.7, pyterrier-dr 0.8.0, pyterrier-splade 0.1.0, pyterrier-alpha 0.16.5)
 ---
 
@@ -21,8 +20,7 @@ Docs: [Terrier indexing](https://pyterrier.readthedocs.io/en/latest/terrier/inde
 [Terrier retrieval](https://pyterrier.readthedocs.io/en/latest/terrier/retrieval.html) ·
 [PISA](https://pyterrier.readthedocs.io/en/latest/ext/pyterrier_pisa/index.html) ·
 [SPLADE](https://pyterrier.readthedocs.io/en/latest/ext/pyterrier-splade/index.html) ·
-[pyterrier-dr](https://pyterrier.readthedocs.io/en/latest/ext/pyterrier-dr/index.html) ·
-[ColBERT v2](https://github.com/cmacdonald/pyterrier_colbert2)
+[pyterrier-dr](https://pyterrier.readthedocs.io/en/latest/ext/pyterrier-dr/index.html)
 
 ## Choosing a first stage
 
@@ -34,7 +32,7 @@ Check for a prebuilt index first (see the `pyterrier-huggingface` skill). Build 
 | Fast lexical retrieval on large corpora | PISA | `pyterrier-pisa` (Linux x86_64) | [references/pisa.md](references/pisa.md) |
 | Learned sparse retrieval | SPLADE, stored in PISA or Terrier | `pyterrier-splade` | [references/splade.md](references/splade.md) |
 | Dense (bi-encoder) retrieval | pyterrier-dr `FlexIndex` | `pyterrier-dr` | [references/dense.md](references/dense.md) |
-| Late interaction | ColBERT v2 / PLAID | `pyterrier_colbert2` (GPU recommended; runs slowly on CPU) | [references/colbert2.md](references/colbert2.md) |
+| Late interaction | ColBERT v2 / PLAID | `pyterrier_colbert2` (GPU recommended; runs slowly on CPU) | the `pyterrier-colbert` skill |
 | Sparse and dense together | reciprocal rank fusion | `pyterrier-alpha` | Fusion, below |
 
 Read the reference file for a backend before writing code for it.
@@ -152,7 +150,6 @@ them, read [references/defaults.md](references/defaults.md).
 | [references/pisa.md](references/pisa.md) | building or querying a PISA index, or storing learned sparse weights in PISA |
 | [references/splade.md](references/splade.md) | SPLADE indexing and retrieval |
 | [references/dense.md](references/dense.md) | dense encoders, FlexIndex, choosing exact or approximate search |
-| [references/colbert2.md](references/colbert2.md) | ColBERT v2 / PLAID retrieval or indexing |
 | [references/defaults.md](references/defaults.md) | choosing or reporting BM25 and other parameters |
 
 ## Troubleshooting

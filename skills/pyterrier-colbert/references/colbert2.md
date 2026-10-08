@@ -92,15 +92,15 @@ factory = ColBERTModelOnlyFactory("colbert-ir/colbertv2.0")
 pipeline = bm25 % 100 >> dataset.text_loader() >> factory.text_scorer()
 ```
 
-This is a reranker, so see the `pyterrier-reranking` skill for how to build the pipeline around it.
+For choosing the rerank depth and evaluating the reranker, see the `pyterrier-pipelines` skill.
 `gpu=False` runs on CPU. Checked: one query against two documents ranked the relevant one first
 (26.9 vs 5.1).
 
 ## 6. Known problems
 
 - `query_encoder()` writes a `query_embs` column, but `end_to_end(query_encoded=True)` reads
-  `query_vec`, so the two can't be chained. Only PLAID-PRF produces `query_vec` (see the
-  `pyterrier-expansion` skill).
+  `query_vec`, so the two can't be chained. Only PLAID-PRF produces `query_vec` (see
+  plaid-prf.md).
 - Rank numbering differs between methods (some start at 0, some at 1). Recompute ranks with
   `pt.model.add_ranks` if a later stage depends on them.
 - `text_scorer(query_encoded=True)` prints debugging lines for every query.

@@ -37,7 +37,8 @@ This is the base skill. The other pyterrier skills assume you know what is here.
 |---|---|
 | Datasets, evaluation, significance, tuning | `pyterrier-experiments` |
 | Prebuilt indexes and caches on Hugging Face | `pyterrier-huggingface` |
-| First-stage retrieval (Terrier, PISA, SPLADE, dense, ColBERT) | `pyterrier-first-stage` |
+| First-stage retrieval (Terrier, PISA, SPLADE, dense) | `pyterrier-first-stage` |
+| ColBERT v2 / PLAID: retrieval, reranking, PRF | `pyterrier-colbert` |
 | Query rewriting, PRF, document expansion | `pyterrier-expansion` |
 | Reranking (cross-encoders, T5, LLMs, learning to rank) | `pyterrier-reranking` |
 | Retrieval-augmented generation | `pyterrier-rag` |

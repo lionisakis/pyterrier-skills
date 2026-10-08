@@ -3,13 +3,12 @@ name: pyterrier-expansion
 description: >-
   Expands queries and documents in PyTerrier: pseudo-relevance feedback and
   query expansion (RM3, Bo1, KL), proximity rewriting with the sequential
-  dependence model (SDM), interpolating rewritten and original queries, dense
-  PRF for ColBERT (PLAID-PRF), and index-time document expansion with doc2query
+  dependence model (SDM), interpolating rewritten and original queries, and index-time document expansion with doc2query
   and Doc2Query-- (generating queries for each document, scoring and filtering
   them). Use when adding query expansion, PRF, query rewriting or document
   expansion to a retrieval pipeline, or when choosing between them. Not for
-  first-stage indexing in general, reranking or evaluation.
-compatibility: pyterrier>=1.1 (checked with 1.1.2, pyterrier-doc2query 0.2.0 and GitHub master, pyterrier_colbert2 4947df6)
+  first-stage indexing in general, reranking or evaluation. For ColBERT PRF, use pyterrier-colbert.
+compatibility: pyterrier>=1.1 (checked with 1.1.2, pyterrier-doc2query 0.2.0 and GitHub master)
 ---
 
 # Query and document expansion
@@ -17,8 +16,7 @@ compatibility: pyterrier>=1.1 (checked with 1.1.2, pyterrier-doc2query 0.2.0 and
 Assumes the `pyterrier-basics` skill.
 
 Docs: [Query rewriting](https://pyterrier.readthedocs.io/en/latest/terrier/rewrite.html) ·
-[pyterrier-doc2query](https://pyterrier.readthedocs.io/en/latest/ext/pyterrier-doc2query/index.html) ·
-[pyterrier_colbert2](https://github.com/cmacdonald/pyterrier_colbert2)
+[pyterrier-doc2query](https://pyterrier.readthedocs.io/en/latest/ext/pyterrier-doc2query/index.html)
 
 ## Choosing an expansion
 
@@ -26,7 +24,7 @@ Docs: [Query rewriting](https://pyterrier.readthedocs.io/en/latest/terrier/rewri
 |---|---|---|---|
 | Add terms from top-ranked documents | RM3, Bo1 or KL (pseudo-relevance feedback) | query time | a Terrier index with a direct index (most have one) |
 | Reward query terms that appear close together | SDM | query time | a Terrier index built with `store_positions=True` |
-| PRF for ColBERT | PLAID-PRF | query time | a ColBERT v2 index (`pyterrier_colbert2`) |
+| PRF for ColBERT | PLAID-PRF | query time | see the `pyterrier-colbert` skill |
 | Add likely queries to each document | doc2query, Doc2Query-- | index time | `pyterrier-doc2query`; a GPU for real corpora |
 
 Query expansion changes the `query` column. Document expansion changes the documents before indexing.
@@ -86,21 +84,6 @@ assert "#uw8" in sdm.search("chemical reactions")["query"].iloc[0]   # proximity
 mixed = bm25 >> index.rm3() >> pt.rewrite.linear(0.7, 0.3) >> bm25
 ```
 
-## Dense PRF for ColBERT (PLAID-PRF)
-
-```python
-prf = colbert_index.plaid_prf_end_to_end(k=1000, top_psg=3, top_exp=14, beta=0.7)
-```
-
-Needs `pyterrier_colbert2` (see the `pyterrier-first-stage` skill). Two traps, both checked:
-
-- `weighting="dfr_rsj"` always fails, with only `Exception: Problem applying … for qid …`. Use
-  `weighting="dfr"` (or the default `"tf-idf"`).
-- The first call writes `stats.json`, `idf_map.json`, `df_map.json` and `cf_map.json` into the index
-  folder, so the folder must be writable. On a large index, that first call scans every document.
-
-For all its parameters, read [references/plaid-prf.md](references/plaid-prf.md).
-
 ## Document expansion with doc2query
 
 Expansion happens **before indexing**: generate queries for each document, optionally filter them,
@@ -132,7 +115,6 @@ For Doc2Query-- (scoring generated queries with a relevance model and dropping t
 - Don't use SDM on an index without positions.
 - Don't index doc2query output with `append=False` and no filter step. The queries would be dropped.
 - Don't regenerate doc2query queries for every experiment. Cache them.
-- Don't use `weighting="dfr_rsj"` in PLAID-PRF.
 - Don't use `pt.rewrite.stash_results()` before a query expansion step. It hides the results the
   expansion needs (`InputValidationError`).
 
@@ -141,7 +123,6 @@ For Doc2Query-- (scoring generated queries with a relevance model and dropping t
 | Read | When |
 |---|---|
 | [references/doc2query.md](references/doc2query.md) | generating, scoring, filtering or caching doc2query expansions |
-| [references/plaid-prf.md](references/plaid-prf.md) | configuring PLAID-PRF for ColBERT |
 
 ## Troubleshooting
 
@@ -152,6 +133,5 @@ For Doc2Query-- (scoring generated queries with a relevance model and dropping t
 | `InputValidationError` naming `stashed_results_0` | `stash_results()` placed before an expansion step | remove it |
 | Expansion changes nothing | `fb_docs` too small, or the first stage returns few results | check the first stage's results; tune `fb_docs` and `fb_terms` |
 | Indexed doc2query documents look unexpanded | `append=False` without a filter step | `Doc2Query(append=True)` or add `QueryFilter(..., append=True)` |
-| `Exception: Problem applying … for qid` in PLAID-PRF | `weighting="dfr_rsj"` | `weighting="dfr"` |
 | `ValueError: Error parsing line b'\x0e' in …/spiece.model` when creating `Doc2Query` | transformers 5 without `protobuf` | `pip install protobuf` |
 | `KeyError: 'docno'` from `QueryScorer` | bug in pyterrier-doc2query 0.2.0 on PyPI | install from GitHub; see references/doc2query.md |
