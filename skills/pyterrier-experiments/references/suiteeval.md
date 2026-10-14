@@ -74,7 +74,8 @@ Suite-specific behaviour:
 | `save_dir="runs"` | `runs/<dataset-id-slug>/<pipeline name>.res.gz` | a run file exists for the same dataset and pipeline name, and `save_mode` is not `"overwrite"` |
 
 - The slug replaces `/` with `-` and lowercases, e.g. `nano-beir/scifact` becomes `nano-beir-scifact`.
-- Pipeline names become file names, so avoid `/` in them.
+- Pipeline names become file names: `pt.Experiment` rejects `:"%/<>^|?` and the path separator when
+  `save_dir` is set. Use letters, digits and `.-_+`.
 - Without `index_dir`, every corpus gets a new `tempfile.mkdtemp()` folder that is never deleted.
 - A re-run with both caches was checked: it reused the index and the runs, and gave identical results.
 
@@ -113,7 +114,9 @@ and override hooks such as `wrap_pipeline`, `postprocess_results`, `measures_for
 - The README example imports `NanoBEIR` but calls `BEIR(pipelines)`. Call the suite you imported.
 - The paper's example uses `context.path / "index.pisa"`. `context.path` is a str, so use `os.path.join`.
 - The README says temporary indexes are cleaned up. They are not.
-- Runs reloaded from `save_dir` are evaluated without your `pt.Experiment` keyword arguments. With
-  `perquery=True` or `baseline=`, cached and fresh pipelines can be reported inconsistently. Use
-  `save_mode="overwrite"` when you need per-query results or significance tests.
+- A run found in `save_dir` is replayed from its `.res.gz`: the pipeline doesn't execute, so its caches
+  and `Lazy` models don't run and print no hit/miss line. Replayed runs are also evaluated without your
+  `pt.Experiment` keyword arguments, so with `perquery=True` or `baseline=`, cached and fresh pipelines can
+  be reported inconsistently. Use `save_mode="overwrite"` to test a cache, and for per-query results or
+  significance tests.
 - Importing `suiteeval` reads ir_datasets documentation for some suites, so the first import can be slow.

@@ -37,11 +37,18 @@ which is usually what you want.
 from pyterrier_caching import Lazy, ScorerCache
 from pyterrier_dr import ElectraScorer
 
-scorer = ScorerCache("electra.cache", dataset.text_loader() >> Lazy(ElectraScorer))
+class InspectableLazy(Lazy):
+    def transform_outputs(self, input_columns):    # lets inspection skip loading the model
+        return list(input_columns)
+
+scorer = ScorerCache("electra.cache", dataset.text_loader() >> InspectableLazy(ElectraScorer))
 ```
 
-`Lazy(cls, *args, **kwargs)` creates the transformer only when it is first called, i.e. on the first
-cache miss. A fully cached experiment then never loads the model, or touches the GPU.
+`Lazy(cls, *args, **kwargs)` creates the transformer on its first real call. Don't use a plain `Lazy`
+here: in pyterrier-caching 0.5.8 `ScorerCache` inspects its scorer on every call, and inspecting a
+`text_loader() >> Lazy(...)` pipeline loads the model even on a 100% hit. With `transform_outputs`
+declared, a fully cached experiment never loads the model or touches the GPU (see "Scorer cache" in
+SKILL.md, which also covers a cached pipeline with nothing before the `Lazy`).
 
 ## 3. Scoring a whole corpus
 

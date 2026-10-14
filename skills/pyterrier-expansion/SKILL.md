@@ -25,7 +25,7 @@ Docs: [Query rewriting](https://pyterrier.readthedocs.io/en/latest/terrier/rewri
 | Add terms from top-ranked documents | RM3, Bo1 or KL (pseudo-relevance feedback) | query time | a Terrier index with a direct index (most have one) |
 | Reward query terms that appear close together | SDM | query time | a Terrier index built with `store_positions=True` |
 | PRF for ColBERT | PLAID-PRF | query time | see the `pyterrier-colbert` skill |
-| Add likely queries to each document | doc2query, Doc2Query-- | index time | `pyterrier-doc2query`; a GPU for real corpora |
+| Add likely queries to each document | doc2query, Doc2Query-- | index time | `pyterrier-doc2query` (+ `pyterrier-dr` for Doc2Query--); a GPU for full corpora, CPU is fine for a slice |
 
 Query expansion changes the `query` column. Document expansion changes the documents before indexing.
 
@@ -53,7 +53,7 @@ assert results["query"].iloc[0] == "chemical reactions"
   and the original is kept in `query_0`. Run `pt.rewrite.reset()` before any neural reranker, so it
   sees the user's query.
 - `index.rm3()`, `index.bo1()` and `index.kl()` take `fb_terms` and `fb_docs` (RM3 also takes
-  `fb_lambda=0.6`). The class forms are `pt.rewrite.RM3(index, ...)`, `Bo1QueryExpansion`,
+  `fb_lambda`). The class forms are `pt.rewrite.RM3(index, ...)`, `Bo1QueryExpansion`,
   `KLQueryExpansion`.
 - Gains are collection-dependent and often small. On vaswani, MAP was 0.2965 for BM25, 0.2984 with RM3,
   0.3046 with Bo1 and 0.3025 with KL. Tune `fb_terms` and `fb_docs` on training topics (see the
@@ -97,9 +97,9 @@ index = pt.terrier.TerrierIndex("collection.d2q.terrier")
 (doc2query >> index.indexer(meta={"docno": 20})).index(dataset.get_corpus_iter())
 ```
 
-- `Doc2Query` defaults: checkpoint `macavaney/doc2query-t5-base-msmarco`, `num_samples=3`,
-  `append=False`. With `append=False` the queries go into a `querygen` column, which a plain indexer
-  ignores. Set `append=True`, or filter first (Doc2Query--, below).
+- By default (`append=False`; the checkpoint and other defaults are in
+  [references/doc2query.md](references/doc2query.md)) the queries go into a `querygen` column, which a
+  plain indexer ignores. Set `append=True`, or filter first (Doc2Query--, below).
 - Generation is slow: one T5 generation per document and sample. Run it once and keep the output with
   `IndexerCache` (see the `pyterrier-caching` skill). Prebuilt doc2query indexes for MS MARCO exist,
   e.g. `pt.Artifact.from_dataset("msmarco_passage", "terrier_stemmed_docT5query")` (see the

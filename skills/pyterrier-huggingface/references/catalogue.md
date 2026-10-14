@@ -67,7 +67,7 @@ Each has five artifacts:
 
 | Id | Kind | Query with |
 |---|---|---|
-| `pyterrier/<corpus>.terrier` | Terrier | `.bm25()` |
+| `pyterrier/<corpus>.terrier` | Terrier (Porter, Terrier stopwords; title + text; see `data.properties`). Stored text is cut at the `meta` width (nfcorpus: 4096 characters, corpus maximum 9939), so rerank with `dataset.text_loader()`, not `index.text_loader()` | `.bm25()` |
 | `pyterrier/<corpus>.pisa` | PISA (porter2) | `.bm25()` |
 | `pyterrier/<corpus>.retromae.flex` | dense, 768-d | `pyterrier_dr.RetroMAE.msmarco_distill()` as the encoder (check the card) |
 | `pyterrier/<corpus>.splade-v1.cache`, `.splade-v3.cache` | indexer cache | SPLADE document vectors, to index with PISA or Terrier |

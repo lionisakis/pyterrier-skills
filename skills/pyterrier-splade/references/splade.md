@@ -31,8 +31,8 @@ documents and queries.
 | Transformer | Input | Adds |
 |---|---|---|
 | `splade.doc_encoder()` | documents with `text` | `toks`: dict of wordpiece to integer weight, e.g. `{'compact': 257, 'memories': 177}` |
-| `splade.query_encoder()` | queries with `query` | `query_toks`: the same form, for the query |
-| `splade.scorer()` | results with `query` and `text` | a SPLADE score, to rerank without an index |
+| `splade.query_encoder()` | queries with `query` | `query_toks`: wordpiece to float weight (×100), for the query |
+| `splade.scorer(text_field="text", batch_size=100)` | results with `query` and `text` | a SPLADE score, to rerank without an index |
 
 The terms are wordpieces from SPLADE's vocabulary, not words. They must not be stemmed or stopped again.
 
@@ -49,7 +49,12 @@ retriever = splade.query_encoder() >> index.quantized()
 ```
 
 - `quantized()` scores with the stored impact values. Don't use `bm25()` on a SPLADE index.
-- The first query builds a `quantized.*` structure inside the index folder.
+- Calling `quantized()` builds a `quantized.*` structure inside the index folder.
+- Scales stack: `doc_encoder(scale=100)` already emits integer weights ×100, and PISA's
+  `toks_indexer(scale=100.0)` multiplies and truncates them again; `query_encoder(scale=100)` ×
+  `quantized(toks_scale=100)` does the same for queries. Rankings are unaffected, but scores are about 1e8.
+- PISA's `toks_indexer()` raises `ValueError: To index from dicts, you must set stemmer='none'` unless the
+  index was created with `stemmer="none"`. To rebuild, use `toks_indexer(mode="overwrite")`.
 
 ## 4. Indexing and retrieval with Terrier
 
@@ -79,14 +84,19 @@ Encoding a corpus with SPLADE needs a GPU for anything but small collections. Pr
 vectors exist on Hugging Face as indexer caches, e.g. `pyterrier/<beir-corpus>.splade-v3.cache`
 and `macavaney/msmarco-passage.splade-lg.cache` (see the `pyterrier-huggingface` skill). They hold
 `toks` for every document, so you only need to index them. Check each card for the exact model, and
-encode queries with that same model.
+encode queries with that same model. They load as pyterrier-caching indexer caches:
+
+```python
+from pyterrier_caching import IndexerCache                          # pip install pyterrier-caching
+cache = IndexerCache.from_hf("macavaney/vaswani.splade.cache")      # card: built with the default Splade()
+PisaIndex("vaswani.splade.pisa", stemmer="none").toks_indexer().index(iter(cache))
+```
 
 ## 6. Problems
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| `ModuleNotFoundError: pyt_splade` | legacy package name | `pip install pyterrier-splade`, `import pyterrier_splade` |
-| Poor results after indexing | index built with stemming or stopwords | rebuild with `stemmer="none"` (PISA) or via `toks_indexer` |
-| Poor results with Terrier | retriever is not `Tf` | `index.retriever("Tf")` or `wmodel="Tf"` |
 | `JavaException … Cannot create new index` | `IterDictIndexer` given a relative path | `os.path.abspath(path)` |
-| Encoding takes hours | CPU only | GPU, or a prebuilt `.splade*.cache` |
+
+Other symptoms (legacy import, stemmed index, wrong Terrier model, checkpoint mismatch, CPU encoding) are
+in the SKILL.md Troubleshooting table.

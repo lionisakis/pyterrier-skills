@@ -25,7 +25,7 @@ values come from Anserini/Pyserini documentation and were not checked here.
 ```python
 import inspect
 print(inspect.signature(index.bm25))        # Terrier or PISA defaults in the installed version
-print(pt.terrier.Retriever(index, wmodel="BM25", controls={"bm25.b": 0.75}))  # shows the controls in use
+print(index.bm25(k1=0.9, b=0.4).controls)   # Terrier: {..., 'bm25.k_1': 0.9, 'bm25.b': 0.4}; print(retriever) shows only the model name
 print(open(f"{index.path}/data.properties").read())   # Terrier: stemmer, stopwords, tokeniser
 print(open(f"{index.path}/pt_meta.json").read())      # any artifact: type, format and other metadata
 ```

@@ -202,7 +202,7 @@ pipeline = bm25 % 100 >> index.text_loader() >> t
 print(pt.inspect.transformer_outputs(pipeline, ["qid", "query"]))           # whole pipeline, no data needed
 
 # Fail fast instead of a warning, before any system is run
-pt.Experiment([pipeline], topics, qrels, ["ndcg_cut_10"], validate="error")
+pt.Experiment([pipeline], topics, qrels, eval_metrics=["ndcg_cut_10"], validate="error")
 ```
 
 | Result | Meaning | Fix |

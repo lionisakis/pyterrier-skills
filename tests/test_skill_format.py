@@ -20,6 +20,9 @@ MAX_NAME = 64
 MAX_DESCRIPTION = 1024
 MAX_LINES = 500
 LINK_RE = re.compile(r"\[[^\]]*\]\(([^)\s]+)(?:\s+\"[^\"]*\")?\)")
+# "the `pyterrier-x` skill" and "see pyterrier-x" name another skill; it must exist. Bare names in
+# parentheses are usually pip packages (pyterrier-dr, pyterrier-pisa), so they are not checked.
+SKILL_REF_RE = re.compile(r"`?(pyterrier-[a-z0-9-]+)`? skill\b|\bsee (pyterrier-[a-z0-9-]+)\b")
 
 SKILLS = find_skills()
 skill_param = pytest.mark.parametrize("skill", SKILLS, ids=[skill_name(s) for s in SKILLS])
@@ -66,6 +69,19 @@ def test_relative_links_exist(skill: Path):
         if not path.exists():
             missing.append(target)
     assert not missing, f"links to missing files: {missing}"
+
+
+@skill_param
+def test_skill_references_exist(skill: Path):
+    """Every skill named in a SKILL.md or references/*.md file is a folder under skills/."""
+    known = {skill_name(s) for s in SKILLS}
+    missing = set()
+    for path in [skill, *sorted(skill.parent.glob("references/*.md"))]:
+        for match in SKILL_REF_RE.finditer(path.read_text(encoding="utf-8")):
+            name = next(g for g in match.groups() if g)
+            if name not in known:
+                missing.add(f"{path.relative_to(REPO_ROOT)}: {name}")
+    assert not missing, f"references to skills that don't exist: {sorted(missing)}"
 
 
 def test_no_stray_skill_files():

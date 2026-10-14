@@ -50,6 +50,8 @@ report.
   [ir-datasets.com/beir](https://ir-datasets.com/beir.html).
 - The standard measure is nDCG@10 per dataset. Report each dataset, and say how you average them
   (arithmetic mean is the BEIR convention).
+- Recall is plain `R@100` or `R@1000`: `ir_measures` counts labels >= 1 as relevant, which is the BEIR
+  convention. Don't add `rel=2`.
 - CQADupStack is 12 sub-forums. The convention is to average them into a single CQADupStack score.
 - SciDocs, BioASQ, Signal-1M, TREC-NEWS and Robust04 are sometimes left out, because some need
   licences. State exactly which datasets your average covers.

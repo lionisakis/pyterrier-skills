@@ -30,11 +30,21 @@ index.index(dataset.get_corpus_iter())
 `PisaIndex(path, text_field=None, stemmer=None, index_encoding=None, batch_size=100000, stops=None,
 threads=1, overwrite=False)`:
 
-- `text_field`: the field to index. If it's left out, every `str` field is indexed and a warning is
-  printed. Set it.
-- `stemmer`: `porter2` for a new index (Terrier's default is `porter`, a different stemmer). Use
-  `"none"` for learned sparse or non-English text.
-- `stops`: the Terrier English stopword list by default. Pass `"none"` or a list to change it.
+- `text_field`: the one field to index. If it's left out, every `str` field is indexed and a warning is
+  printed. Set it. The prebuilt BEIR indexes on Hugging Face index title and text together, so to match
+  them concatenate first: `({"docno": d["docno"], "text": f'{d["title"]} {d["text"]}'} for d in docs)`.
+- `stemmer`: `porter2` (default), `krovetz` or `"none"`. PISA has **no** Porter v1, which is Terrier's
+  default. To match stemming across backends, build the Terrier index with
+  `stemmer="EnglishSnowballStemmer"` (Porter2; Terrier accepts a Java class name), or report that the
+  stemmers differ. A prebuilt Terrier index can't be changed: read its stemmer from the `termpipelines`
+  line of `{index.path}/data.properties` (`pyterrier/vaswani.terrier` has `Stopwords,PorterStemmer`,
+  i.e. Porter v1). If it's Porter v1, rebuild the Terrier index yourself with Porter2 or report the mismatch. Use `"none"` for learned sparse or non-English text. Even with k1, b, stemmer and
+  stopwords matched, the tokenisers still differ (PISA exposes no tokeniser option), so scores and top-10s
+  diverge (nfcorpus, k1=0.9 b=0.4, Porter2 both sides, 308 test queries: scores ≈ 0.70 ×; top-10
+  overlap 0.84 as the mean over queries of shared docnos ÷ 10, or 0.95 as mean Jaccard). Say which
+  overlap you report. Compare by rank, not by score.
+- `stops`: the Terrier English stopword list by default. Pass `"none"` or a list to change it. Keep it
+  matched with Terrier: `stopwords="none"` on one side only widens the divergence sharply (scores ≈ 0.27 ×).
 - `overwrite=True`, or `index.indexer(mode="overwrite")`, replaces an existing index.
 - PISA stores **no document text**: `PisaIndex` has no `text_loader()`. Load text from the dataset
   (`dataset.text_loader()`) before a reranker.
@@ -49,29 +59,22 @@ threads=1, overwrite=False)`:
 | `index.dph(num_results=1000)` | |
 | `index.pl2(c=1.0)` | |
 | `index.qld(mu=1000.0)` | query likelihood, Dirichlet smoothing |
-| `index.quantized()` | for learned sparse indexes (section 4) |
+| `index.quantized()` | for learned sparse indexes (see the `pyterrier-splade` skill) |
 
 - Each scoring setting builds its own compressed structures on first use, e.g.
   `bm25.k1-0.9.b-0.4.q0.bmw.64.block_simdbp` inside the index folder. The first query with a new
   setting is slower, and every setting you try takes disk space.
 - PISA results have no `docid` column, only `docno`.
+- PISA tokenises the raw query itself and splits on punctuation, so queries with `:` need no stripping.
+  Only the Terrier side does (references/terrier.md).
 - With default settings on the same corpus, PISA BM25 and Terrier BM25 give different scores, because
   their stemmer and k1/b both differ. On vaswani, nDCG@10 was 0.467 for PISA and 0.447 for Terrier. Pass
   matching parameters when you compare backends.
 
 ## 4. Learned sparse indexes
 
-Index pre-weighted terms (e.g. from SPLADE) with `toks_indexer`, and query them with `quantized()`:
-
-```python
-index = PisaIndex("splade.pisa", stemmer="none")
-(splade.doc_encoder() >> index.toks_indexer()).index(dataset.get_corpus_iter())
-retriever = splade.query_encoder() >> index.quantized()
-```
-
-- `toks_indexer(scale=100.0)` multiplies float weights by `scale` and rounds them to integers.
-- Use `stemmer="none"`. SPLADE terms are wordpieces and must not be stemmed.
-- For the full SPLADE setup, see the `pyterrier-splade` skill.
+Pre-weighted terms (SPLADE and similar) go in with `toks_indexer()` on an index created with
+`stemmer="none"` and are queried with `quantized()`. See the `pyterrier-splade` skill.
 
 ## 5. Errors
 

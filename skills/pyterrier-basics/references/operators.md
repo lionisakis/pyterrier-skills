@@ -23,8 +23,8 @@ grouping of any pipeline.
   `(bm25 | dph) >> reranker`.
 - `+` returns the union of both sides' documents, and a document missing from one side gets 0 from
   that side. The two sides' score ranges are not normalised,
-  so a weight such as `bm25 + 0.1 * dense` depends on the score scale. Normalise first (see the
-  `pyterrier-first-stage` skill on fusion).
+  so a weight such as `bm25 + 0.1 * dense` depends on the score scale. Normalise first, or fuse by rank
+  (see the `pyterrier-fusion` skill).
 - `**` keeps the left-hand input's score and adds a `features` numpy array, with one entry per
   transformer, in order. `bm25 >> (tf ** pl2)` gives `features = [tf, pl2]`.
 - `%` applies per query and keeps rank order.

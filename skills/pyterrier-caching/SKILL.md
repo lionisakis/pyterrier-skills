@@ -64,14 +64,32 @@ assert calls["docs"] == 10 and first["score"].tolist() == second["score"].tolist
 ```
 
 - Put the text loader **inside** the cached transformer, as above. On a hit, text isn't loaded at all.
+- A scorer built eagerly (`CrossEncoder(...)` at the top of the script) loads its model even when every
+  pair is a hit. Wrap it in `InspectableLazy` (below) when re-runs should be fast.
 - The cache stores only `score`. Columns the scorer adds (e.g. `text`) aren't in the output.
 - The key is the query **text** and `docno`, not `qid`. The same query under another `qid` is a hit.
 - The cache doesn't know which model produced a score. **A different scorer given the same path
   silently returns the old scores.** Name the path after the scorer and corpus, and delete it when
   the model, its settings or the text change.
-- Wrap slow-loading models in `Lazy` so they're only loaded on a miss:
-  `ScorerCache(path, dataset.text_loader() >> Lazy(ElectraScorer))`. Read
-  [references/scorer-caches.md](references/scorer-caches.md).
+- Pass `verbose=True` to see what hit: each call prints `<cache>: N hit(s), M miss(es)`.
+- `Lazy(factory)` delays loading a model, but in pyterrier-caching 0.5.8 `ScorerCache` inspects its
+  scorer on every call, and that loads a plain `Lazy` even on a 100% hit. Declare its columns, as below.
+
+```python
+from pyterrier_caching import Lazy, ScorerCache
+
+class InspectableLazy(Lazy):
+    def transform_inputs(self):          # needed when nothing comes before it in the cached pipeline
+        return [["qid", "query", "docno", "text"]]
+
+    def transform_outputs(self, input_columns):    # needed after a text loader
+        return list(input_columns)
+
+scorer = ScorerCache(path, dataset.text_loader() >> InspectableLazy(make_model), verbose=True)
+```
+
+`make_model` can be a class or any function that returns a transformer. Read
+[references/scorer-caches.md](references/scorer-caches.md).
 
 ## Retriever cache
 
@@ -108,7 +126,9 @@ terrier = pt.terrier.TerrierIndex("corpus.splade.terrier")
 terrier.toks_indexer().index(iter(cache))                             # cheap, repeatable
 ```
 
-`iter(cache)` (or `cache.get_corpus_iter()`) yields the stored documents. `cache.text_loader()` loads
+`iter(cache)` (or `cache.get_corpus_iter()`) yields the stored documents; `cache.to_dataframe()` loads
+them into a frame. Check `cache.built()` first: `len()` and iteration on an unbuilt cache raise
+`RuntimeError: cache not built`. `cache.text_loader()` loads
 stored fields into results, but only when **every** docno in the results is in the cache. A missing
 docno fails with the unhelpful `ValueError: not enough values to unpack (expected 2, got 0)`.
 
@@ -153,8 +173,9 @@ which returns the right cache class, and check sizes first (see the `pyterrier-h
 | Scores don't change after changing the model | same cache path for a different scorer | new path, or delete the old cache |
 | `RuntimeError: retriever only works if corpus is scored completely` | `cached_retriever()` on a partly filled dense cache | `cache.score_all(dataset)` first, or use the cache as a scorer |
 | Cached retriever always misses | input frames differ in some column | `RetrieverCache(path, retriever, on="query")` |
-| The model loads even when everything is cached | the model is built eagerly | wrap it with `Lazy(...)` |
+| The model loads even when everything is cached (`verbose=True` shows 0 misses) | the model is built eagerly, or a plain `Lazy` is loaded by the cache's input inspection | wrap it in a `Lazy` subclass that defines `transform_outputs` (see "Scorer cache") |
 | `KeyError: 'text'` after a scorer cache | the cache outputs `score`, not the scorer's extra columns | load text after the cache if a later stage needs it |
 | `ValueError: No implementation found … pip install pyterrier-caching` when loading a `.cache` artifact | package not installed | `pip install pyterrier-caching` |
 | `ValueError: not enough values to unpack (expected 2, got 0)` from `IndexerCache.text_loader()` | a result docno that isn't in the indexer cache | cache the whole corpus, or load text from the dataset |
+| `RuntimeError: cache not built` from `len(cache)` or `iter(cache)` | the `IndexerCache` has not been filled yet | test `cache.built()` before reading it |
 | `AssertionError: unknown docno encountered` from a dense cache | a docno that isn't in the corpus the cache was built from | build the cache from the same corpus the first stage retrieves from |

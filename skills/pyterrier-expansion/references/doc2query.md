@@ -13,7 +13,7 @@ and PyTerrier 1.1.2, on CPU over two vaswani documents.
 ## 1. Install
 
 ```bash
-pip install pyterrier-doc2query protobuf
+pip install pyterrier-doc2query protobuf pyterrier-dr    # pyterrier-dr provides the ElectraScorer used by Doc2Query--
 # Doc2Query-- (QueryScorer) needs the GitHub version until a release after 0.2.0:
 pip install git+https://github.com/terrierteam/pyterrier_doc2query.git
 ```
@@ -24,7 +24,9 @@ pip install git+https://github.com/terrierteam/pyterrier_doc2query.git
 - `protobuf` is required with transformers 5. The default checkpoint ships only a SentencePiece file
   (`spiece.model`). Without `protobuf`, loading the tokenizer fails with the misleading
   `ValueError: Error parsing line b'\x0e' in …/spiece.model`, which comes from the tiktoken parser.
-- A GPU is needed for any real corpus: every document runs `num_samples` T5 generations.
+- A GPU is needed for a full corpus at paper scale (tens of samples per document): every document runs
+  `num_samples` T5 generations. A slice is fine on CPU with `fast_tokenizer=True`: 200 vaswani documents ×
+  4 samples took 41.5 s to generate and 20.9 s to score with ELECTRA.
 
 ## 2. Generating queries
 
@@ -37,6 +39,11 @@ expanded = doc2query(documents_df)          # adds a `querygen` column, one quer
 
 `Doc2Query(checkpoint="macavaney/doc2query-t5-base-msmarco", num_samples=3, batch_size=4,
 doc_attr="text", append=False, out_attr="querygen", fast_tokenizer=False, device=None)`.
+
+Other checkpoints on the Hub (`checkpoint=`): `doc2query/msmarco-t5-small-v1` (T5-small, 294 MB; runs
+with this package, but its queries are visibly worse), `doc2query/msmarco-t5-base-v1`,
+`castorini/doc2query-t5-large-msmarco`, and multilingual `doc2query/msmarco-<language>-mt5-base-v1`. Pick
+the size from the task; only the default and T5-small were run here.
 
 | `append` | Result |
 |---|---|
@@ -60,7 +67,7 @@ import pyterrier_dr
 
 pipeline = (
     Doc2Query(num_samples=40, append=False)
-    >> QueryScorer(pyterrier_dr.ElectraScorer())     # adds `querygen_score`, one score per query
+    >> QueryScorer(pyterrier_dr.ElectraScorer())     # adds `querygen_score`: a list per document, one score per query
     >> QueryFilter(t=threshold, append=True)          # keeps queries with score >= t, appends them to `text`
 )
 ```
@@ -71,7 +78,8 @@ pipeline = (
   `querygen` columns. With `append=False`, it filters `querygen` and `querygen_score` instead.
 - `t` is on the scorer's own scale, so it differs for every scorer. Doc2Query-- chooses it as a
   percentile of the query scores over a sample of the corpus (e.g. keep the top 30%). Compute it on a
-  sample, rather than reusing a number from another setup.
+  sample, rather than reusing a number from another setup. `querygen_score` holds a list per document,
+  so flatten it first: `threshold = scored["querygen_score"].explode().astype(float).quantile(0.70)`.
 - Prebuilt Doc2Query-- indexes for MS MARCO passage exist as `pt.Artifact.from_dataset("msmarco_passage",
   "pisa_d2qmm_n40_electra_p70")` and similar variants (see the `pyterrier-huggingface` skill).
 
@@ -89,6 +97,8 @@ for t in [low, high]:      # try thresholds without regenerating
 ```
 
 - Generation is by far the slowest step, so cache its output and vary only the filtering.
+- An expanded **slice** must be evaluated against a baseline over the same slice. Against the full-corpus
+  BM25 it scores near zero (0.014 AP for 200 of 11,429 vaswani documents), which looks like a bug.
 - `Doc2QueryStore` and `QueryScoreStore` in this package are deprecated in favour of
   `pyterrier_caching.IndexerCache` (see the `pyterrier-caching` skill).
 
@@ -99,4 +109,4 @@ for t in [low, high]:      # try thresholds without regenerating
 | `ValueError: Error parsing line b'\x0e' in …/spiece.model` | transformers 5 without `protobuf` | `pip install protobuf` |
 | `KeyError: 'docno'` from `QueryScorer` | bug in pyterrier-doc2query 0.2.0 (PyPI) | install from GitHub master |
 | Indexed documents look unexpanded | `append=False` and no `QueryFilter(append=True)` | set `append=True` on `Doc2Query`, or add the filter |
-| Generation takes days | CPU, or too many samples | GPU; cache with `IndexerCache`; use a prebuilt index |
+| Generation takes days | a full corpus on CPU, or too many samples | GPU; `fast_tokenizer=True`; cache with `IndexerCache`; use a prebuilt index |

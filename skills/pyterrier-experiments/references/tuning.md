@@ -22,10 +22,14 @@ pt.KFoldGridSearch(pipeline, params, topics_list, qrels, metric="map", jobs=1, b
 
 - `params` maps each transformer *object* in the pipeline to `{parameter_name: [values]}`.
 - `GridSearch` returns the pipeline set to its best values (`return_type="opt_pipeline"`), the best
-  `(score, settings)` (`"best_setting"`), or both. It also prints the best value and setting.
+  `(score, [(transformer, param, value), ...])` (`"best_setting"`; get the values with
+  `{p: v for _, p, v in settings}`), or both. It also prints the best value and setting.
 - `GridScan` returns a DataFrame with one row per combination and one column per metric. Use it to
   see how sensitive a pipeline is to a parameter. **It leaves the transformer set to the last value it
-  tried**, so create the retriever again before using it for anything else.
+  tried**, so create the retriever again before using it for anything else. To get both the curve and
+  the best value in one pass, run `GridScan` once and take the row with the highest score.
+- Both average the metric over every qid in `qrels`, without filtering by `topics`. Pass
+  `qrels[qrels.qid.isin(topics.qid)]` when tuning on a topic subset.
 - `KFoldGridSearch` takes a list of topic folds. For each fold it tunes on the other folds and retrieves
   for the held-out fold. It returns `(results, settings)`. `results` is a results frame covering every
   topic, retrieved with each fold's tuned setting. Evaluate it like any run. `settings` holds the best
@@ -41,7 +45,7 @@ bm25 = pt.terrier.Retriever(index, wmodel="BM25", controls={"bm25.b": 0.75, "bm2
 best = pt.GridSearch(
     bm25,
     {bm25: {"bm25.b": [0.3, 0.5, 0.75, 0.9], "bm25.k_1": [0.9, 1.2, 1.5]}},
-    train_topics, qrels, metric="map", return_type="best_setting",
+    train_topics, qrels[qrels.qid.isin(train_topics.qid)], metric="map", return_type="best_setting",
 )
 ```
 

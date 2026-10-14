@@ -9,7 +9,8 @@ description: >-
   TriviaQA and others via rag:), Wikipedia corpora and indexes, and answer
   measures (exact match, F1, ROUGE, BERTScore, LLM-as-judge). Use when asked to
   build, run or evaluate a RAG or open-domain question answering pipeline in
-  PyTerrier. Not for retrieval-only evaluation or reranking with LLMs.
+  PyTerrier. Not for retrieval-only evaluation or reranking with LLMs (see
+  pyterrier-generative).
 compatibility: pyterrier>=1.1 (checked with 1.1.2 and pyterrier-rag 0.3.0, transformers 5.19, CPU only)
 ---
 
@@ -32,7 +33,7 @@ retriever % k  >>  text_loader  >>  Concatenator()  >>  Reader(backend)
 
 | Stage | Output |
 |---|---|
-| retriever, text loader | results with `text` (see the `pyterrier-first-stage` skill) |
+| retriever, text loader | results with `text` (see the `pyterrier-retrieval` skill) |
 | `Concatenator()` | **one row per query**: `qid`, `query`, `qcontext` (the passages joined into one string) |
 | `Reader(backend, prompt=...)` | `qid`, `query_0`, `prompt` (the text sent to the model), `qanswer` |
 
@@ -60,6 +61,9 @@ assert answer["qanswer"].iloc[0] != "### Assistant"
 
 - `k`, the number of passages, is a quality and cost decision, as is the size of `qcontext`. Limit
   it with `Concatenator(max_elements=..., max_length=..., tokenizer=...)`.
+- `search()` takes one query string. To answer a frame of topics without gold answers, call
+  `answers = rag.transform(topics)`: one row per topic with `qid`, `query_0`, `prompt` and `qanswer`. With
+  gold answers, use `pt.Experiment` ("Evaluating answers" below).
 - Templates are Jinja: `{{ query }}` and `{{ qcontext }}`.
 
 ## Prompts: always check what the model receives
@@ -109,6 +113,9 @@ answers = nq.get_answers("dev")        # qid, gold_answer: one row per acceptabl
   `pyterrier/ragwiki-terrier` (13 GB, BM25, stores text), `pyterrier/ragwiki-e5.flex` (65 GB, E5),
   `pyterrier/raghpq-terrier` (see the `pyterrier-huggingface` skill). Use the corpus the dataset was
   built for.
+- For a CPU demo on `rag:nq`, the BEIR index `pt.Artifact.from_hf("pyterrier/nq.terrier")` (1.4 GB, BM25,
+  stores text) covers the same NQ Wikipedia passages. Its docnos differ from `rag:nq_wiki`: harmless for
+  `EM`/`F1`, which score per `qid`, but wrong for anything that needs the dataset's own docno space.
 
 ## Evaluating answers
 
@@ -144,8 +151,8 @@ results = pt.Experiment(
 - Don't keep `max_new_tokens=32` for long-form answers.
 - Don't compare readers with different `k` or context limits without saying so.
 - Don't download the 65 GB `ragwiki-e5.flex` without checking disk space and asking.
-- Don't plan on LLM rerankers from pyterrier-generative without first checking that
-  `import pyterrier_generative` works (see the `pyterrier-reranking` skill).
+- Don't install pyterrier-generative into this environment. It replaces pyterrier-rag with a branch
+  build (see the `pyterrier-generative` skill).
 
 ## Reference files
 
@@ -158,9 +165,10 @@ results = pt.Experiment(
 | Symptom | Cause | Fix |
 |---|---|---|
 | Answers are `'### Assistant'` or unrelated text | FastChat fallback template for a non-chat model | `PromptTransformer(instruction=template, raw_instruction=True)` |
+| `TypeError: expected string or bytes-like object, got 'DataFrame'` from `rag.search(...)` | `search()` takes one query string | `rag.transform(topics)` |
 | `AttributeError: 'FlashRAGDataset' object has no attribute 'name'` | `get_answers()` without a split | `get_answers("dev")` |
 | Answers cut off mid-sentence | `max_new_tokens=32` default | raise `max_new_tokens` on the backend |
 | EM and F1 are 0 | the corpus doesn't contain the answers, or answers aren't normalised | check retrieval recall; use the dataset's own corpus |
 | Context loses the best passages | prompt truncated to `max_input_length` | lower `k` or set `Concatenator(max_length=..., tokenizer=...)` |
 | `ModuleNotFoundError: vllm` | `VLLMBackend` without vLLM | `pip install vllm` (GPU), or use `HuggingFaceBackend` |
-| `RuntimeError: operator torchvision::nms does not exist` on import | installing pyterrier-rag pulled a CUDA `torchvision` (and `torchaudio`) next to a CPU-only `torch` | `pip install --force-reinstall torchvision --index-url https://download.pytorch.org/whl/cpu`, and remove or match `torchaudio` |
+| `RuntimeError: operator torchvision::nms does not exist` on import | installing pyterrier-rag pulled a CUDA `torchvision` (and `torchaudio`) next to a CPU-only `torch`, or a `torchvision` from another environment leaks in through `.pth` or `--system-site-packages` (see the `pyterrier-colbert` skill) | `pip install --force-reinstall torchvision --index-url https://download.pytorch.org/whl/cpu`, and remove or match `torchaudio`; or build a fully isolated environment |

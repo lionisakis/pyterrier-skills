@@ -9,8 +9,9 @@ description: >-
   splade-lg caches) from Hugging Face. Covers checkpoints, stemming and
   weighting traps, and replacing the legacy pyt_splade package. Use whenever
   SPLADE or learned sparse retrieval appears in a PyTerrier task, whether as
-  retriever or reranker. Not for BM25 on PISA or Terrier, or for fusing SPLADE
-  with other retrievers (see pyterrier-pipelines).
+  retriever or reranker. Not for BM25 on PISA or Terrier (see pyterrier-retrieval),
+  for fusing SPLADE with other retrievers (see pyterrier-fusion), or for choosing a
+  rerank depth (see pyterrier-reranking).
 compatibility: pyterrier>=1.1 (checked with 1.1.2, pyterrier-splade 0.1.0, pyterrier-pisa 0.4.7, CPU only)
 ---
 
@@ -47,7 +48,7 @@ import pyterrier_splade
 
 dataset = pt.get_dataset("irds:vaswani")
 docs = list(itertools.islice(dataset.get_corpus_iter(), 50))   # small slice: CPU encoding is slow
-splade = pyterrier_splade.Splade()        # checkpoint stated in references/splade.md; pass model= to change it
+splade = pyterrier_splade.Splade()        # default: naver/splade-cocondenser-ensembledistil; pass model= to change it
 ```
 
 Use the same checkpoint for documents and queries.
@@ -67,6 +68,8 @@ assert len(splade_retriever.search("chemical reactions")) > 0
 - `doc_encoder()` adds a `toks` column (wordpiece → integer weight); `query_encoder()` adds `query_toks`.
   The terms are wordpieces, so they must not be stemmed or stopped again.
 - `quantized()` scores with the stored weights. Never put `bm25()` on a SPLADE index.
+- The retriever returns only documents with a nonzero score. Documents sharing no wordpiece with the
+  query are absent, so a 60-document index can return 58 rows.
 - For the Terrier variant (`toks_indexer`, `retriever("Tf")`), read [references/splade.md](references/splade.md).
 
 ## Rerank
@@ -78,22 +81,25 @@ reranked = pipeline.search("chemical reactions")
 assert len(reranked) == 10
 ```
 
-- `scorer(text_field="text", batch_size=100)` encodes each query once and every document on the fly, then
-  scores by dot product. It needs `query` and the text column.
-- The rerank depth (`% 10`) comes from the task. For choosing it and evaluating the reranker, see the
-  `pyterrier-pipelines` skill.
+- `scorer()` encodes each query once and every document on the fly, then scores by dot product. It
+  needs `query` and the text column (its arguments are in [references/splade.md](references/splade.md)).
+- The rerank depth (`% 10`) comes from the task. For choosing it, see the `pyterrier-reranking` skill;
+  for evaluating the reranker, the `pyterrier-experiments` skill.
+- The `bm25` above is the prebuilt full-vaswani `TerrierIndex.example()`, a stand-in so the code runs. For a
+  BM25 first stage over your own collection (or a slice of one), see the `pyterrier-retrieval` skill.
 
 ## Prebuilt vectors
 
 Prebuilt document vectors exist as indexer caches, e.g. `pyterrier/<beir-corpus>.splade-v3.cache` and
 `macavaney/msmarco-passage.splade-lg.cache`. They hold `toks` for every document, so only indexing is
-left. Check each card for the checkpoint and encode queries with it. For loading them, read
+left. Check each card for the checkpoint and encode queries with it. For the loading code
+(`IndexerCache.from_hf`, then `toks_indexer().index(iter(cache))`), read
 [references/splade.md](references/splade.md).
 
 ## Don't
 
 - Don't `import pyt_splade`. Use `pyterrier_splade`.
-- Don't stem or stop SPLADE terms. Build a PISA index with `stemmer="none"`, or use `toks_indexer`.
+- Don't stem or stop SPLADE terms. Index with `toks_indexer()`; on PISA the index also needs `stemmer="none"`.
 - Don't score a SPLADE index with BM25. Use `quantized()` on PISA or `"Tf"` on Terrier.
 - Don't query an index with a different SPLADE checkpoint from the one that built it.
 - Don't call `text_loader()` on a PISA index. It stores no text; use `dataset.text_loader()`.
@@ -109,10 +115,11 @@ left. Check each card for the checkpoint and encode queries with it. For loading
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| `ModuleNotFoundError: pyt_splade` | legacy package name | `pip install pyterrier-splade`, `import pyterrier_splade` |
-| Poor results after indexing | index built with stemming or stopwords | rebuild with `stemmer="none"` (PISA) or via `toks_indexer` |
+| `DeprecationWarning: The 'pyt_splade' package has been renamed` (or `ModuleNotFoundError: pyt_splade`) | legacy package name | `pip install pyterrier-splade`, `import pyterrier_splade` |
+| Poor results after indexing | index built with stemming or stopwords | rebuild with `toks_indexer()` and, on PISA, `stemmer="none"` |
+| `ValueError: To index from dicts, you must set stemmer='none'` | PISA `toks_indexer()` on an index created with a stemmer | `PisaIndex(path, stemmer="none")` |
 | Poor results with Terrier | retriever is not `Tf` | `index.retriever("Tf")` or `wmodel="Tf"` |
 | Poor results with a prebuilt cache | queries encoded with a different checkpoint | use the checkpoint named on the card |
 | `InputValidationError` naming `text` from `scorer()` | no text loader before the scorer | `dataset.text_loader()` |
-| `RuntimeError: A PISA index already exists at …` | indexing into an existing PISA index | check `built()`, or `PisaIndex(path, overwrite=True)` |
+| `RuntimeError: A PISA index already exists at …` | indexing into an existing PISA index | check `built()`, or `toks_indexer(mode="overwrite")` (`PisaIndex(path, overwrite=True)` only affects `index.index(...)`) |
 | Encoding takes hours | CPU only | GPU, or a prebuilt `.splade*.cache` |

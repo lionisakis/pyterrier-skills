@@ -33,12 +33,13 @@ Each encoder class has named variants that load a Hugging Face checkpoint:
 | `pyterrier_dr.E5.base()`, `.small()`, `.large()` | `intfloat/e5-{base,small,large}-v2` |
 | `pyterrier_dr.GTR.base()` (and `large`, `xl`, `xxl`) | `sentence-transformers/gtr-t5-*` |
 | `pyterrier_dr.TctColBert(...)`, `Ance`, `BGEM3`, `Dragon`, `CDE`, ... | see the class docstrings |
-| `pyterrier_dr.SBertBiEncoder("<name>")`, `HgfBiEncoder` | any sentence-transformers or Hugging Face model |
+| `pyterrier_dr.SBertBiEncoder("<name>")`, `HgfBiEncoder.from_pretrained("<name>")` ([CLS] pooling) | any sentence-transformers or Hugging Face model |
 
 - An encoder is a transformer. `model.query_encoder()` (adds `query_vec`) and `model.doc_encoder()`
   (adds `doc_vec`) give the two halves. The model itself picks its role from its input: query encoder
   for topics, document encoder for documents, and **scorer** for results that have `query` and `text`.
-  So `bm25 % 100 >> dataset.text_loader() >> model` reranks BM25 with the dense model, with no index.
+  So `bm25 % 100 >> dataset.text_loader() >> model.scorer()` reranks BM25 with the dense model, with no index
+  (`model.scorer()` rather than bare `model`, so a missing `text` column is an error, not a silent passthrough).
 - Use the same model, with the same variant, for documents and queries.
 
 ## 3. Indexing
@@ -53,7 +54,10 @@ index = pyterrier_dr.FlexIndex("collection.flex")
 
 - `FlexIndex(path, sim_fn="dot")` stores the vectors and docnos. It does **not** store text or the
   model name, so record which model you used, e.g. in the path.
-- Use `sim_fn="cos"` if the model was trained for cosine similarity. Check the model card.
+- Use `sim_fn="cos"` if the model was trained for cosine similarity and does not normalise its vectors. The
+  card may not say: encode a few documents and check the norms. `doc_vec` is an object column of arrays,
+  so stack it first: `np.linalg.norm(np.stack(frame["doc_vec"]), axis=1)`. `SBertBiEncoder` passes
+  `normalize_embeddings=False`; only the `E5` variants normalise.
 
 ## 4. Choosing a retriever
 
@@ -72,25 +76,15 @@ All of these are methods of `FlexIndex`, and each goes after the query encoder:
 
 - Approximate retrievers trade recall for speed. Compare their recall with `retriever()` on your topics
   before reporting results.
-- Every retriever takes `num_results=1000`.
+- Every retriever except `faiss_flat_retriever()` takes `num_results=1000`; cut that one with `% k`.
+- `sim_fn` is not saved in `pt_meta.json`: pass it on every `FlexIndex(...)` or `from_hf(..., sim_fn=...)`
+  load. The `faiss_*` retrievers always use inner product.
 
 ## 5. Fusion with sparse retrieval
 
-```python
-import pyterrier_alpha as pta
-
-hybrid = pta.RRFusion(bm25, model >> index.retriever(), k=60, num_results=1000)
-
-normalised_sum = (
-    (bm25 >> pta.fusion.PerQueryMaxMinScore())
-    + (model >> index.retriever() >> pta.fusion.PerQueryMaxMinScore())
-)
-```
-
-- `RRFusion` scores each document by summing `1 / (rank + k)` over the inputs. Score scales don't
-  matter.
-- `PerQueryMaxMinScore` rescales each query's scores to 0–1 before they are added. Tune any weights on
-  training topics.
+See the `pyterrier-fusion` skill: `pta.RRFusion(bm25, model >> index.retriever(), k=60)`, or a per-query
+min-max normaliser on each side before adding scores (`pta.fusion.PerQueryMaxMinScore` is broken in
+pyterrier-alpha 0.16.5; the fusion skill shows the replacement).
 
 ## 6. Pseudo-relevance feedback
 

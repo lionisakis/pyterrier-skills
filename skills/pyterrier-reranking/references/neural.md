@@ -52,9 +52,9 @@ pipeline = first_stage % 100 >> dataset.text_loader() >> mono % 10 >> duo
 
 | Class | Defaults |
 |---|---|
-| `MonoT5ReRanker` | `tok_model="t5-base"`, `model="castorini/monot5-base-msmarco"`, `batch_size=4`, `text_field="text"`, `device=None` (CUDA if available) |
-| `DuoT5ReRanker` | `tok_model="t5-base"`, `model="castorini/duot5-base-msmarco"`, `batch_size=4`, `text_field="text"`, `agg="sum"` |
-| `mT5ReRanker` | multilingual monoT5 |
+| `MonoT5ReRanker` | `tok_model="t5-base"`, `model="castorini/monot5-base-msmarco"`, `batch_size=4`, `text_field="text"`, `device=None` (CUDA if available), `verbose=True` (a progress bar per batch; pass `False` for clean logs) |
+| `DuoT5ReRanker` | `tok_model="t5-base"`, `model="castorini/duot5-base-msmarco"`, `batch_size=4`, `text_field="text"`, `device=None`, `verbose=True`, `agg="sum"` |
+| `mT5ReRanker` | multilingual monoT5: `tok_model` and `model` default to `unicamp-dl/mt5-base-mmarco-v2`, `batch_size=4`, `text_field="text"`, `verbose=True` |
 
 - For other checkpoints (e.g. `castorini/monot5-3b-msmarco-10k`), pass `model=` and the matching
   `tok_model=`.

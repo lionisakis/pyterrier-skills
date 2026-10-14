@@ -18,6 +18,7 @@ Features are a numpy array in the `features` column, one entry per feature trans
 | Terrier `FeaturesRetriever` | `pt.terrier.FeaturesRetriever(index, wmodel="BM25", features=["WMODEL:Tf", "WMODEL:PL2"])` | computes Terrier features in one pass; faster on large indexes |
 | Your own feature | `pt.apply.doc_score(fn)` inside `**`, or `pt.apply.doc_features(fn)` returning an array | e.g. document length, a neural score |
 | The current score as a feature | `pt.ltr.score_to_feature()` | appends `score` to `features` |
+| BM25, DPH and PL2 as the features | `bm25 % 100 >> (index.bm25() ** index.dph() ** index.pl2())` | feature order = operand order |
 
 ```python
 features = bm25 % 100 >> (
@@ -28,6 +29,10 @@ features = bm25 % 100 >> (
 ```
 
 Check the features before training: `features.search("query")["features"].iloc[0]`.
+
+- The union scores only the first stage's documents: `bm25 % 100` gives 100 rows per query, and a member
+  that didn't return a document gives it 0 for that feature (`pyterrier/_ops.py`, `FeatureUnion`). The first
+  stage and its cutoff define the candidate pool.
 
 ## 2. Training and applying a model
 
@@ -51,7 +56,8 @@ ranker.fit(train_topics, qrels, valid_topics, qrels)
 - With `form="regression"` (scikit-learn), the validation topics are **ignored**.
 - With `form="ltr"`, they are **required** (`ValueError: No validation results to fit to`) and are
   passed to the learner as `eval_set` and `eval_group`. That is LightGBM's interface, and what its
-  early stopping uses.
+  early stopping uses. LightGBM 4.7 prints a harmless `LGBMDeprecationWarning` that `eval_set` is
+  deprecated in favour of `eval_X`/`eval_y`; PyTerrier still passes `eval_set` and the fit works.
 - After `fit`, the pipeline ranks by the model's prediction.
 - A learner fits one feature layout. After changing the features, create a new learner object.
 

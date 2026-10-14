@@ -27,7 +27,7 @@ index = pt.terrier.TerrierIndex("vaswani.terrier")
 index.indexer(
     meta={"docno": 20, "text": 4096},   # store docno and text, with maximum lengths
     text_attrs=["text"],                 # fields to index
-    threads=4,
+    threads=4,                           # faster, but the document order is not reproducible; 1 for a reproducible index
 ).index(dataset.get_corpus_iter())
 ```
 
@@ -67,7 +67,15 @@ tunable = pt.terrier.Retriever(index, wmodel="BM25", controls={"bm25.b": 0.75}) 
 - `pt.terrier.Retriever(index)` **without** `wmodel=` uses DPH. Always pass `wmodel`.
 - Create the index object once and reuse it for every retriever in a script.
 - Results include Terrier's integer `docid` as well as `docno`.
-- Queries are tokenised automatically, so punctuation in queries no longer breaks parsing.
+- Queries are tokenised automatically when they contain any of ``, . ; ! ? ( ) [ ] { } < > " ^ ' ` ~ @ # $
+  % & * - + = | \ /`` (`pyterrier/terrier/retriever.py`, `_query_needs_tokenised`). `:` is not on the list,
+  because it is TerrierQL field syntax, so a query whose **only** punctuation is `:`, such as "Vitamin D: new
+  advice", reaches Terrier raw and fails with a Java `IOException: Unknown field D` and returns **no results**; only a Java ERROR is logged,
+  and in `pt.Experiment` the system's significance columns come out NaN. On an index built **without**
+  fields (the default), the same query is worse: `jnius.JavaException: java.lang.IllegalStateException:
+  Index must have 1 or more fields` aborts the whole batch. Strip punctuation first:
+  `pt.apply.query(lambda r: re.sub(r"[^\w\s]", " ", r["query"])) >> bm25`. If the task says to keep
+  queries raw, replace only `:`: `pt.apply.query(lambda r: r["query"].replace(":", " "))`.
 
 ## 4. Tokenisation, stemming and stopwords
 
@@ -84,7 +92,8 @@ tunable = pt.terrier.Retriever(index, wmodel="BM25", controls={"bm25.b": 0.75}) 
 ## 5. Fields and positions
 
 - `store_separate_fields=True` keeps per-field statistics, needed for field-based models such as
-  BM25F and for `include_fields=` in `bm25(...)`. It's off by default.
+  BM25F. It's off by default. `include_fields=` in `bm25(...)` is unrelated: it lists `meta` fields
+  (e.g. `["text"]`) to return with each result.
 - `store_positions=True` stores term positions, needed for proximity models such as SDM. It's off by
   default.
 - Both make the index larger. Turn them on only when the model needs them.
@@ -97,4 +106,5 @@ tunable = pt.terrier.Retriever(index, wmodel="BM25", controls={"bm25.b": 0.75}) 
 | `ValueError: Index already exists at …/data.properties` | `IterDictIndexer` on an existing index | `overwrite=True`, or a new path |
 | `JavaException … Cannot create new index: path …/var/<name> does not exist` | `IterDictIndexer` given a relative path | pass `os.path.abspath(path)`, or use `TerrierIndex(path)` |
 | Java log `Term … written in N bytes. Max expected size was M` | a metadata value longer than its `meta` width | rebuild with larger `meta` widths |
+| `jnius.JavaException … java.lang.IllegalStateException: Index must have 1 or more fields` | a query contains `word:` (TerrierQL field syntax) and the index was built without fields | strip punctuation before the retriever (section 3) |
 | `AssertionError: input documents must contain a 'docno' field` | documents lack `docno` | rename the id field (e.g. `doc_id` to `docno`) |

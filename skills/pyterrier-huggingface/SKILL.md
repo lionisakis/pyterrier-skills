@@ -2,14 +2,16 @@
 name: pyterrier-huggingface
 description: >-
   Finds, loads and shares prebuilt PyTerrier artifacts (Terrier, PISA, dense
-  FlexIndex, ColBERT and Anserini indexes, SPLADE and reranker score caches,
-  corpus graphs) on the Hugging Face Hub with pt.Artifact.from_hf, to_hf,
+  FlexIndex, ColBERT and Anserini indexes, doc2query-expanded indexes, SPLADE
+  indexer caches, reranker score caches, corpus graphs) on the Hugging Face
+  Hub with pt.Artifact.from_hf, to_hf,
   from_url and from_dataset. Covers discovering artifacts through the
   pyterrier-artifact tag and the BEIR collections, which package each artifact
   needs, download sizes, caching and how artifacts are stored. Use when a task
   needs an index for MS MARCO, TREC DL, BEIR, TREC-COVID, RAG Wikipedia or
-  another standard collection, before building an index yourself, or when
-  publishing an index. Not for building new indexes.
+  another standard collection, before building or encoding a new index, or
+  when publishing an index. Not for building new indexes, or for Pyserini
+  prebuilt indexes outside PyTerrier.
 compatibility: pyterrier>=1.1 (checked with 1.1.2; Hub listings checked 2026-10-08)
 ---
 
@@ -52,13 +54,14 @@ Search the Hub before naming a repository. Never invent a repository id from mem
    - [BEIR: Terrier Indexes](https://huggingface.co/collections/pyterrier/beir-terrier-indexes-670569c5b0ec83825723253d)
    - [BEIR - RetroMAE Indexes](https://huggingface.co/collections/pyterrier/beir-retromae-indexes-670bb95e54fda45dfa5d3f0e)
 4. Read the repository's card (README) for the corpus, model, settings and any benchmark scores.
+   In code: `requests.get(f"https://huggingface.co/datasets/{repo_id}/raw/main/README.md", timeout=60).text`.
    Check the file sizes on its "Files" tab before downloading.
 
 ```python
 import requests
 rows = requests.get(
     "https://huggingface.co/api/datasets",
-    params={"filter": "pyterrier-artifact.sparse_index.pisa", "limit": 1000},
+    params={"filter": "pyterrier-artifact.sparse_index.pisa", "search": "nfcorpus", "limit": 1000},  # drop "search" to list all
     timeout=60,
 ).json()
 print(sorted(r["id"] for r in rows))
@@ -78,17 +81,20 @@ The type tag `pyterrier-artifact.<type>.<format>` says which package loads it:
 | `sparse_index.anserini` | `AnseriniIndex` | `pyterrier-anserini` (Java) | `.bm25(...)` |
 | `dense_index.flex` | `pyterrier_dr.FlexIndex` | `pyterrier-dr` | `encoder >> index.retriever()` with **the same encoder that built it** |
 | `dense_index.jpq` | `JPQIndex` | `pyterrier-dr` | see the card |
-| `dense_index.colbert` | `ColBERTv2Index` | `pyterrier_colbert2` (GPU) | `.end_to_end()` |
+| `dense_index.colbert` | `ColBERTv2Index` | `pyterrier_colbert2` (GPU recommended) | `.end_to_end()` |
+| `multivec_index.plaid` | `pyterrier_pylate.PlaidIndex` | `pyterrier-pylate` (from git) | `model.query_encoder() >> index.retriever()` with **the model that built it** (not stored in the index) |
 | `indexer_cache.lz4pickle` | `IndexerCache` | `pyterrier-caching` | iterate it to index, e.g. SPLADE vectors |
-| `scorer_cache.hdf5` | `ScorerCache` | `pyterrier-caching` | in place of the reranker |
+| `scorer_cache.hdf5` / `scorer_cache.sqlite3` | `DenseScorerCache` / `ScorerCache` | `pyterrier-caching` | in place of the reranker |
 | `corpus_graph.np_topk` | corpus graph | `pyterrier-adaptive` | adaptive reranking |
 | `quality_score_cache.numpy` | quality scores | `pyterrier-quality` | static pruning |
 
 - A missing package raises `ValueError: No implementation found …`, followed by the install hint.
 - A dense or learned-sparse index contains vectors only. Find the encoder on the card (e.g.
   RetroMAE for `*.retromae.flex`, E5 for `ragwiki-e5.flex`) and use exactly that model for queries.
-- Most indexes don't store document text. Check `"text" in index.bm25().search("x").columns`, and
-  if it's missing, load text from the dataset (`dataset.text_loader()`) before reranking.
+- Most indexes don't store document text, and a retriever never returns it unless asked
+  (`index.bm25(include_fields=["text"])`). Check with
+  `"text" in index.text_loader()(index.bm25().search("x").head(1)).columns`; if it's missing, use
+  `dataset.text_loader()` before reranking.
 
 ## Loading options
 
@@ -136,7 +142,7 @@ with the user first. For storage details, Zenodo, peer-to-peer transfer and manu
 - Don't query a dense index with a different encoder from the one that built it.
 - Don't assume an index stores document text.
 - Don't compare a prebuilt index's scores with a paper without checking its stemming, stopwords and
-  BM25 parameters on the card.
+  BM25 parameters: on the card, or for a Terrier index in `<index.path>/data.properties` (`termpipelines=`).
 - Don't use the `macavaney/my-index*`, `macavaney/my_index*` or `deleteme*` repositories. They are tests.
 - Don't use `pta.Artifact` from old cards. It is `pt.Artifact` in 1.x.
 
@@ -157,5 +163,6 @@ with the user first. For storage details, Zenodo, peer-to-peer transfer and manu
 | Disk full during download | the unpacked size is larger than the Hub size | free space, or set `PYTERRIER_HOME` to a larger disk |
 | Still the old version after the repository changed | the cache never refreshes | pin `@<commit>`, or delete `$PYTERRIER_HOME/artifacts/<hash>` |
 | `KeyError: 'text'` in a reranker | the index stores no text | add `dataset.text_loader()` before the reranker |
+| Terrier warns `Structure meta reading data file directly from disk (SLOW) - try index.meta.data-source=fileinmem`, and `text_loader()` is slow (`pyterrier/nq.terrier`: about 230 s for 3 queries) | the stored fields are read from disk per access | set `index.meta.data-source=fileinmem` in the index's `data.properties` (the warning states the memory needed, 845 MiB for `nq.terrier`), or load text from the dataset |
 | Dense retrieval returns poor results | wrong query encoder for the index | use the encoder named on the card |
 | `pip install pyterrier-pisa` finds no matching distribution | it ships Linux x86_64 wheels only | use the `.terrier` version of the same collection, or run on Linux |

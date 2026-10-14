@@ -92,7 +92,8 @@ factory = ColBERTModelOnlyFactory("colbert-ir/colbertv2.0")
 pipeline = bm25 % 100 >> dataset.text_loader() >> factory.text_scorer()
 ```
 
-For choosing the rerank depth and evaluating the reranker, see the `pyterrier-pipelines` skill.
+For choosing the rerank depth, see the `pyterrier-reranking` skill; for evaluating the reranker, the
+`pyterrier-experiments` skill.
 `gpu=False` runs on CPU. Checked: one query against two documents ranked the relevant one first
 (26.9 vs 5.1).
 
