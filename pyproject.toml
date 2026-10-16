@@ -24,10 +24,12 @@ dev = [
     "suiteeval>=0.1.8",
     "faiss-cpu",
     "pyterrier-doc2query @ git+https://github.com/terrierteam/pyterrier_doc2query.git",
-    # declared so that the CPU-only index below applies (uv sources only cover direct dependencies)
-    "torch",
-    "torchvision",
-    "torchaudio",
+    # declared so that the CUDA index below applies (uv sources only cover direct dependencies).
+    # cu118 builds run on the eval hosts' driver 535 (CUDA 12.2); newer cu12x wheels need a newer driver.
+    # 2.7.1 is the oldest torch pyterrier-splade accepts (>=2.6) with a cu118 build.
+    "torch==2.7.1",
+    "torchvision==0.22.1",
+    "torchaudio==2.7.1",
 ]
 
 [tool.uv]
@@ -35,16 +37,16 @@ package = false
 # pyjnius 1.8.0 declares Python 3.12 support but ships only cp313/cp314 wheels and no sdist.
 constraint-dependencies = ["pyjnius<1.8"]
 
-# CPU-only torch. Without this, a fresh lock takes PyPI's CUDA builds (3 GB of NVIDIA libraries) and
-# pyterrier-rag's torchvision/torchaudio can end up built for a different torch.
+# CUDA 11.8 torch. PyPI's default torch wheels target a CUDA newer than driver 535 supports, and
+# pinning all three keeps pyterrier-rag's torchvision/torchaudio built for the same torch.
 [tool.uv.sources]
-torch = { index = "pytorch-cpu" }
-torchvision = { index = "pytorch-cpu" }
-torchaudio = { index = "pytorch-cpu" }
+torch = { index = "pytorch-cu118" }
+torchvision = { index = "pytorch-cu118" }
+torchaudio = { index = "pytorch-cu118" }
 
 [[tool.uv.index]]
-name = "pytorch-cpu"
-url = "https://download.pytorch.org/whl/cpu"
+name = "pytorch-cu118"
+url = "https://download.pytorch.org/whl/cu118"
 explicit = true
 
 [tool.pytest.ini_options]

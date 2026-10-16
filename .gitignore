@@ -12,3 +12,6 @@ uv.lock
 *.pisa/
 *.sqlite
 *.res.gz
+.env
+pyterrier-docs/
+logs/

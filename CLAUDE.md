@@ -9,7 +9,9 @@ and its extensions. Skills follow the open [Agent Skills](https://agentskills.io
 are installed locally with the cross-agent `npx skills` CLI. There is no plugin marketplace and nothing is
 published. `pyproject.toml` only defines the dev environment and the test suite that checks skills.
 
-Skills are organised by pipeline stage (see the table in README.md). `pyterrier-basics` is the base skill:
+Skills come in two layers (see README.md): stage skills (retrieval, fusion, expansion, reranking, rag) that
+compare options and route to the model-family skills (splade, dense, colbert, generative), which cover every role of one
+model type. `pyterrier-basics` is the base skill:
 every other skill opens with "Assumes the `pyterrier-basics` skill." and does not repeat its content
 (install, data model, operators, legacy → 1.x).
 
@@ -21,6 +23,8 @@ tests/skill_files.py           # helpers: find skills, parse frontmatter, extrac
 tests/test_skill_format.py     # frontmatter, size and link rules
 tests/test_snippets.py         # python blocks must parse; `python run` blocks execute
 pyproject.toml                 # dev dependency group + pytest config (not a package)
+evals/evals.json               # realistic task prompts; evals/run_evals.py runs them through `claude -p`
+evals/pipelines/               # pipeline-matrix evals (skills/docs/code-view ablation); evals/run_pipelines.py
 ```
 
 Never put a `SKILL.md` anywhere except `skills/<name>/SKILL.md`. The installer scans the repo root and
@@ -34,6 +38,7 @@ uv run pytest                    # fast: format checks + every python block pars
 uv run pytest -m run             # execute `python run` blocks (needs pyterrier[all] and Java 11+)
 uv run pytest -m slow            # execute run blocks including `python run slow` ones
 uv run pytest -m run -k <skill>  # one skill
+python evals/run_evals.py --model opus   # agents do real tasks with the skills and report defects (see evals/README.md)
 npx skills add . --list          # preview what the installer finds
 npx skills add . --agent claude-code   # install into ./.claude/skills of the current project
 ```
@@ -53,6 +58,16 @@ command after editing a skill. `-g` installs for the user instead of the project
    blocks may be fragments but must still parse.
 4. Add any new dependency (e.g. `pyterrier-dr`) to the `dev` group in `pyproject.toml`.
 5. `uv run pytest`, then `uv run pytest -m run -k <name>`.
+
+## Improving a skill from agent runs
+
+`pytest` proves the snippets run; it cannot tell whether an agent that reads a skill writes the right
+code for a real task. `evals/evals.json` holds realistic user prompts, one per skill group.
+`python evals/run_evals.py --model opus` runs each through the `claude` CLI with every skill installed
+and collects a `findings.md` per prompt: defects with file:line evidence, proposed edits, and a trigger
+check against the descriptions. Turn each defect into one "Don't" bullet or Troubleshooting row, run
+`pytest`, then re-run that eval with `--id N`. Add a prompt whenever a user hits a problem that no
+existing prompt covers. Details in `evals/README.md`.
 
 ## Writing rules
 

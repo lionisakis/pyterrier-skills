@@ -101,6 +101,8 @@ print(results.head())
   evaluate on `docno`.
 - Results carry document text only when something adds it. Check with
   `"text" in results.columns`.
+- `query` is the raw topic text: vaswani topics are upper case and end with a newline, while document
+  text is lower case. Normalise case and whitespace before matching query strings against text.
 - A query rewriter keeps the previous query in `query_0`. `pt.rewrite.reset()` restores it.
 - Extra columns pass through. Use `pt.inspect.transformer_outputs(t, ["qid", "query"])` to see what a
   transformer will output.

@@ -53,7 +53,8 @@ model = pyterrier_dr.TasB.dot()                                 # the encoder
 
 The model picks its role from its input: query encoder for topics, document encoder for documents, and
 scorer for results that have `query` and `text`. Any sentence-transformers checkpoint loads with
-`pyterrier_dr.SBertBiEncoder("sentence-transformers/all-MiniLM-L6-v2")`. For the other encoder classes
+`pyterrier_dr.SBertBiEncoder("sentence-transformers/all-MiniLM-L6-v2")` (22.7M parameters, the cheapest on CPU;
+`TasB` is DistilBERT, 66M). For the other encoder classes
 and their checkpoints, read [references/dense.md](references/dense.md).
 
 ## Index and retrieve
@@ -109,6 +110,8 @@ column, which retrievers keep unless `drop_query_vec=True`.
 - Don't assume `sim_fn`. Pass `FlexIndex(path, sim_fn="cos")` on **every** load if the card says cosine and
   the model doesn't normalise its vectors: `sim_fn` isn't stored in the index, and the `faiss_*` retrievers
   and `scorer()` always use dot product. The card may not say: check `np.linalg.norm` of one encoded batch.
+  The vector column holds one array per row, so stack it first:
+  `np.linalg.norm(np.stack(out["doc_vec"].to_numpy()), axis=1)`.
   `SBertBiEncoder` itself encodes with `normalize_embeddings=False`; a model comes out unit-norm only if its
   `modules.json` has a `Normalize` module (all-MiniLM-L6-v2 and the bge-* models do) or it is an `E5` variant.
   On a unit-norm model, dot product equals cosine, so the dot-only `scorer()` ranks as `sim_fn="cos"` would.

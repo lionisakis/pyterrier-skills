@@ -50,6 +50,10 @@ report.
   [ir-datasets.com/beir](https://ir-datasets.com/beir.html).
 - The standard measure is nDCG@10 per dataset. Report each dataset, and say how you average them
   (arithmetic mean is the BEIR convention).
+- The published BEIR BM25 baseline is Anserini/Pyserini BM25: k1=0.9, b=0.4, Porter stemming, Lucene
+  English stopwords (values in the `pyterrier-retrieval` skill, references/defaults.md). Terrier's
+  built-in BM25 uses k1=1.2, b=0.75, so for BEIR-family comparisons (BEIR, NanoBEIR) pass
+  `index.bm25(k1=0.9, b=0.4)` explicitly.
 - Recall is plain `R@100` or `R@1000`: `ir_measures` counts labels >= 1 as relevant, which is the BEIR
   convention. Don't add `rel=2`.
 - CQADupStack is 12 sub-forums. The convention is to average them into a single CQADupStack score.

@@ -108,6 +108,8 @@ assert fresh[columns].reset_index(drop=True).equals(cached[columns].reset_index(
   `on="query"` (or a list) to key on chosen columns.
 - The rows come back with a different DataFrame index, so compare cached and fresh results on their
   columns, not with `.equals()` directly.
+- The cache is a **directory** at `path` (`<hash>.dbm.dat`, `<hash>.dbm.dir`, `<hash>.dbm.bak` and
+  `pt_meta.json`). Delete it with `shutil.rmtree(path)`; `os.remove(path)` raises `IsADirectoryError`.
 - The files use `dbm.dumb`, which has no locking. Don't share one cache between processes running at
   the same time.
 
@@ -179,3 +181,4 @@ which returns the right cache class, and check sizes first (see the `pyterrier-h
 | `ValueError: not enough values to unpack (expected 2, got 0)` from `IndexerCache.text_loader()` | a result docno that isn't in the indexer cache | cache the whole corpus, or load text from the dataset |
 | `RuntimeError: cache not built` from `len(cache)` or `iter(cache)` | the `IndexerCache` has not been filled yet | test `cache.built()` before reading it |
 | `AssertionError: unknown docno encountered` from a dense cache | a docno that isn't in the corpus the cache was built from | build the cache from the same corpus the first stage retrieves from |
+| `IsADirectoryError: [Errno 21] Is a directory: <cache path>` | `os.remove` on a cache path; every cache is a directory | `shutil.rmtree(path)` |

@@ -65,6 +65,7 @@ tunable = pt.terrier.Retriever(index, wmodel="BM25", controls={"bm25.b": 0.75}) 
   `retriever(model, model_args)`, plus query expansion (`rm3`, `bo1`, `kl`, `sdm`; see the
   `pyterrier-expansion` skill).
 - `pt.terrier.Retriever(index)` **without** `wmodel=` uses DPH. Always pass `wmodel`.
+- `num_results` defaults to 1000 per query, for the shortcuts and `Retriever` alike.
 - Create the index object once and reuse it for every retriever in a script.
 - Results include Terrier's integer `docid` as well as `docno`.
 - Queries are tokenised automatically when they contain any of ``, . ; ! ? ( ) [ ] { } < > " ^ ' ` ~ @ # $
@@ -82,7 +83,7 @@ tunable = pt.terrier.Retriever(index, wmodel="BM25", controls={"bm25.b": 0.75}) 
 | Option | Values |
 |---|---|
 | `tokeniser` | `english` (default), `utf`, `whitespace`, `twitter`, `identity` |
-| `stemmer` | `porter` (default), `weakporter`, `none`, and Snowball stemmers: `danish`, `finnish`, `german`, `hungarian`, `norwegian`, `portugese`, `spanish`, `swedish`, `turkish`, ... |
+| `stemmer` | `porter` (default), `weakporter`, `none`, `EnglishSnowballStemmer` (Porter2), and Snowball stemmers: `danish`, `finnish`, `german`, `hungarian`, `norwegian`, `portugese`, `spanish`, `swedish`, `turkish`, ... |
 | `stopwords` | `terrier` (default, English), `none`, or a list of words |
 
 - For non-English text use `tokeniser="utf"`, the matching stemmer or `"none"`, and

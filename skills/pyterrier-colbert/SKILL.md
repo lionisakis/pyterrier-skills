@@ -38,8 +38,9 @@ Docs: [pyterrier_colbert2](https://github.com/cmacdonald/pyterrier_colbert2) ·
 | PLAID-PRF | yes | no |
 | Install | git, plus FAISS; C++ compile on CPU | git; no FAISS or compiler |
 
-The two need different transformers versions, so use a separate, **fully isolated** environment for each: no
-`--system-site-packages` and no `.pth` file pointing at another venv. Indexes are not interchangeable between
+Their transformers pins overlap only on `>=4.41,<5` (pylate installs 5.3 on its own; together they resolve to 4.57),
+so use a separate, **fully isolated** environment for each: no `--system-site-packages` and no `.pth` file
+pointing at another venv. Indexes are not interchangeable between
 them. Pick `pyterrier_colbert2` for a prebuilt `.colbertv2` index or PLAID-PRF, and `pyterrier-pylate` for
 PyLate models (ModernColBERT and others). The rest of this page covers `pyterrier_colbert2` until the
 "PyLate backend" section.
@@ -167,8 +168,9 @@ For the transformer table, index options and every caveat, read [references/pyla
 ## Don't
 
 - Don't import `ColBERTFactory` or `ColBERTIndexer`. They belong to the old `pyterrier_colbert`.
-- Don't install pyterrier_colbert2 next to pyterrier-pylate (transformers `<5` against `<=5.3`). Use a
-  separate environment for each, fully isolated: no `--system-site-packages`, no `.pth` into another venv.
+- Don't install pyterrier_colbert2 next to pyterrier-pylate. It resolves, but downgrades pylate to
+  transformers 4.57 (`<5` against `>=4.41,<=5.3`). Use a separate environment for each, fully isolated:
+  no `--system-site-packages`, no `.pth` into another venv.
 - Don't `pip install pyterrier-pylate` from PyPI; it isn't published. Install it from git.
 - Don't load a `PlaidIndex` with `pyterrier_colbert2` or a `.colbertv2` index with pyterrier-pylate.
 - Don't chain `index.query_encoder()` into `end_to_end(query_encoded=True)`. The first writes `query_embs`,
@@ -192,7 +194,7 @@ For the transformer table, index options and every caveat, read [references/pyla
 | Symptom | Cause | Fix |
 |---|---|---|
 | `ImportError` on `import pyterrier_colbert2` | ColBERT or torch missing; the package imports them at once | install `colbert-ai` (pulled in by the git install) and torch |
-| pip can't resolve transformers | `pyterrier_colbert2` caps `transformers<5`; pylate pins `<=5.3.0,>=4.41.0`, which also clashes with newer 5.x | separate environment per backend |
+| pip can't resolve transformers | `pyterrier_colbert2` caps `transformers<5`; pylate pins `<=5.3.0,>=4.41.0`; together they only fit 4.41–4.x, and anything needing newer 5.x clashes | separate environment per backend |
 | `No matching distribution found for pyterrier-pylate` | not on PyPI | `pip install git+https://github.com/lightonai/pyterrier-pylate.git` |
 | `ImportError: pyterrier[java] not installed … triggered by Retriever.__init__` on a Terrier call in the PyLate environment | the pylate git install pulls plain `pyterrier`, without the Java extra | `pip install 'pyterrier[java]'` (or `'pyterrier[all]'`) in that environment |
 | `RuntimeError: operator torchvision::nms does not exist`, then `Could not import module 'PreTrainedModel'` on `import pyterrier_pylate` | a `torchvision` from another environment leaks in (`.pth` or `--system-site-packages`); its `RuntimeError` slips past transformers' `except ImportError` | rebuild a fully isolated environment |

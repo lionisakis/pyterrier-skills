@@ -31,8 +31,9 @@ pip install 'pyterrier[java]' ir-datasets git+https://github.com/lightonai/pyter
   `pyterrier[all]`), or every Terrier call, such as the BM25 in section 5, fails with
   `ImportError: pyterrier[java] not installed`.
 - It pulls in `pylate>=1.3`, which pins `transformers<=5.3.0,>=4.41.0` (installs 5.3) and
-  `sentence-transformers==5.3.0`. It therefore conflicts with `pyterrier_colbert2` (`transformers<5`) and
-  with anything needing a newer transformers 5.x, so the two backends can't share an environment. Make the
+  `sentence-transformers==5.3.0`. With `pyterrier_colbert2` (`transformers<5`) the pins overlap only on
+  `>=4.41,<5`: installing both resolves to transformers 4.57.6 and both work, but pylate then runs below
+  its 5.3 default, and anything needing a newer transformers 5.x conflicts. Keep one environment per backend. Make the
   environment fully isolated: a venv that reaches another venv through `.pth` or `--system-site-packages`
   fails on import with `RuntimeError: operator torchvision::nms does not exist`.
 - No compiler, FAISS or GPU is needed. PLAID search uses `fast-plaid` (prebuilt wheels).
@@ -66,6 +67,9 @@ index = PlaidIndex("./vaswani.plaid")
 
 - The index stores token embeddings only, not text, and not the model name. Record the checkpoint
   yourself (on the Hub card, for example); queries must use the same model.
+- To index a slice of the corpus, use the wrapper's range arguments: `dataset.get_corpus_iter(start=0,
+  count=60)` is the first 60 documents. `dataset.get_topics()` takes no range argument (its argument is a
+  text-field variant), so slice the frame instead: `dataset.get_topics().head(2)`.
 - An existing non-empty folder raises `RuntimeError: Index already exists`. Rebuild with
   `(model.doc_encoder() >> index.indexer(mode="overwrite")).index(...)`.
 - `index.indexer(batch_size=100_000)` is how many documents are buffered per `add_documents` call.

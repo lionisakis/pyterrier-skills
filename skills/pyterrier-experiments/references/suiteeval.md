@@ -120,3 +120,7 @@ and override hooks such as `wrap_pipeline`, `postprocess_results`, `measures_for
   be reported inconsistently. Use `save_mode="overwrite"` to test a cache, and for per-query results or
   significance tests.
 - Importing `suiteeval` reads ir_datasets documentation for some suites, so the first import can be slow.
+- A topic whose only punctuation is `:` (NanoBEIR nfcorpus: "Infectobesity: Adenovirus 36 and Childhood
+  Obesity") aborts a Terrier run on that corpus with `java.lang.IllegalStateException: Index must have 1 or more
+  fields`. It is TerrierQL field syntax, not a broken index or JVM. Strip punctuation in the pipeline the factory
+  yields; see the `pyterrier-retrieval` skill, references/terrier.md section 3.

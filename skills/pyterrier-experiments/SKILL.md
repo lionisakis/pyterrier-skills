@@ -65,7 +65,7 @@ assert {"name", "nDCG@10", "nDCG@10 p-value corrected"} <= set(results.columns)
 - **Topics with several fields.** Collections such as Robust04 and TREC-COVID have
   `title`/`description`/`narrative` fields. Without a variant, `get_topics()` only prints a message
   and returns those fields with **no `query` column**. Pass the field you want:
-  `get_topics("title")`.
+  `get_topics("title")`. BEIR collections have no `title` variant; their query text is `text`.
 - ir_datasets ids are mapped: `doc_id` becomes `docno` and `query_id` becomes `qid`. The text
   field keeps its own name (`text`, `body`, `title`, `abstract`, ...).
 - Licensed corpora (e.g. Robust04 documents) still have public topics and qrels. You can evaluate a
@@ -93,7 +93,7 @@ pt.Experiment(
 | Need | Use |
 |---|---|
 | Measures | `from pyterrier.measures import *`, then e.g. `nDCG@10`, `AP(rel=2)`, `RR(rel=2)@10`, `R@1000`, `P@10`. Syntax on [ir-measur.es](https://ir-measur.es/en/latest/). `MAP` is accepted and is printed as `AP` |
-| Significance | `baseline=` plus `correction="holm"` (or `"bonferroni"`, `"hs"`; any statsmodels `multipletests` method). The default test is a paired t-test (`test="t"`). Adds `+`, `-`, `p-value`, `reject` and `p-value corrected` columns per measure. The baseline row's values are NaN, and step-down corrections such as Holm can give several systems the same corrected p-value; both are expected |
+| Significance | `baseline=` plus `correction="holm"` (or `"bonferroni"`, `"hs"`; any statsmodels `multipletests` method). The default test is a paired t-test (`test="t"`). Adds `+`, `-`, `p-value`, `reject` and `p-value corrected` columns per measure. The baseline row's significance columns are NaN (its measures print normally), and step-down corrections such as Holm can give several systems the same corrected p-value; both are expected |
 | Per-query scores | `perquery=True`: columns `name`, `qid`, `measure`, `value`. `perquery="both"` returns `(averages, per_query)` |
 | Mean response time | add `"mrt"` to `eval_metrics` |
 | Evaluate an existing run | pass the results frame as a system, or `pt.Evaluate(run, qrels, metrics=[...])` |
@@ -164,6 +164,11 @@ results = NanoBEIR(
   passes the pipelines as a list, so a name raises `TypeError: baseline should be an int`.
 - With `save_dir`, pipeline names become file names and may not contain `:"%/<>^|?`. Name a reranked
   system `BM25+monoELECTRA`, not `BM25>>monoELECTRA`.
+- With `save_dir`, a run whose `.res.gz` already exists is replayed from disk: the pipeline does not
+  execute (scorer caches and `Lazy` models print no hit/miss output) and the replay ignores your
+  `pt.Experiment` kwargs, so `baseline=` significance can be inconsistent. Pass `save_mode="overwrite"`
+  to execute the pipelines: to exercise a cache, or for per-query results and significance tests
+  (references/suiteeval.md, "Known problems").
 
 For the full dataset list, the caching layout, custom suites and known bugs, read
 [references/suiteeval.md](references/suiteeval.md).
@@ -235,11 +240,13 @@ tuned = pt.GridSearch(
 | Symptom | Cause | Fix |
 |---|---|---|
 | `TypeError: Experiment() missing 1 required positional argument: 'eval_metrics'` | measures passed as `metrics=` | `eval_metrics=[...]` |
+| `AssertionError: invalid param cutoff=<object object at …>` from inside `ir_measures` | a measure with a mandatory cutoff used bare: `Recall`, `R` or `P` | write the cutoff: `R@1000`, `P@10`; `nDCG`, `AP` and `RR` are fine bare |
 | `ValueError: Requested multiple testing correction, but no baseline was specified.` | `correction=` without `baseline=` | add `baseline=` |
 | `ValueError: save_dir runs does not exist` | `save_dir` folder missing | `os.makedirs(save_dir, exist_ok=True)` first |
 | `ValueError: save_dir is not yet supported for tree execution plan` | `save_dir` with `plan="tree"` | drop one of them |
 | Message `There are multiple query fields available`, then `KeyError: 'query'` | multi-field topics loaded without a variant | `get_topics("title")` |
 | Unchanged scores after changing a pipeline | `save_mode="reuse"` loaded the old run by name | rename the system or delete its `.res.gz` |
+| No cache hit/miss output on a SuiteEval rerun, or inconsistent significance columns | the saved `.res.gz` was replayed without executing the pipeline | `save_mode="overwrite"` |
 | `UserWarning: There are shared pipeline components among N pipelines` | systems share a prefix | `plan="tree"` (without `save_dir`) |
 | `ImportError: This dataset requires pyarrow` | NanoBEIR and some other datasets store data as parquet | `pip install 'ir_datasets[pyarrow]'` |
 | Disk fills up after SuiteEval runs | temporary indexes are never deleted | pass `index_dir=` and delete it yourself |

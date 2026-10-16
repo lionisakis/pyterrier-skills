@@ -1,0 +1,179 @@
+{
+  "skill_name": "pyterrier-skills",
+  "evals": [
+    {
+      "id": 1,
+      "name": "basics-experiments",
+      "skills": [
+        "pyterrier-basics",
+        "pyterrier-experiments"
+      ],
+      "prompt": "I'm using the vaswani test collection in PyTerrier. Set up BM25 and DPH retrievers, plus a third system that's BM25 top-100 rescored by a custom transformer which adds a bonus of +1.0 to the BM25 score for any document whose text contains the first term of the query (needs the document text). Compare all three in one pt.Experiment with nDCG@10, MAP and RR@10, with the BM25 as baseline, a paired t-test and Bonferroni correction. Then do a small grid search of BM25's b over {0.3, 0.5, 0.75, 0.9} on the vaswani topics using the experiments skill's tuning guidance and report the best b with its nDCG@10. Give me one script I can re-run.",
+      "expected_output": "One script; custom transformer passes pt.inspect checks; Experiment with baseline=0, correction='bonferroni'; grid search via pt.GridSearch or a loop; results table.",
+      "expectations": [
+        "The custom transformer starts transform() with a pt.validate call and passes pt.inspect.transformer_inputs/outputs",
+        "The bonus transformer returns row[\"score\"] + 1.0 for matching documents, not a bare 1.0/0.0",
+        "pt.Experiment is called with baseline=0 and a correction argument",
+        "The text column is added with a text_loader before the custom scorer",
+        "No legacy API (pt.init, BatchRetrieve) appears in the script",
+        "The script runs to completion in the project venv"
+      ]
+    },
+    {
+      "id": 2,
+      "name": "huggingface-retrieval",
+      "skills": [
+        "pyterrier-basics",
+        "pyterrier-huggingface",
+        "pyterrier-retrieval",
+        "pyterrier-fusion"
+      ],
+      "prompt": "I want to run BM25 on BEIR nfcorpus (irds:beir/nfcorpus/test) in PyTerrier. First check whether there's a prebuilt Terrier or PISA index for nfcorpus on Hugging Face and load it with pt.Artifact.from_hf if so; otherwise build a Terrier index locally from the corpus. Then ALSO build a PISA index locally of the same corpus, and run BM25 on both with identical k1=0.9, b=0.4 so the scores are comparable. Fuse the two runs with reciprocal rank fusion. Evaluate Terrier BM25, PISA BM25 and the fusion on the nfcorpus test topics with nDCG@10 and R@100 in one pt.Experiment. Finally show me how I'd push my local Terrier index to Hugging Face (don't actually push, just the code). Give me one script I can re-run.",
+      "expected_output": "Script that looks for an artifact, builds Terrier and PISA indexes with matching parameters, fuses with pta.RRFusion, evaluates, and shows index.to_hf(...) code.",
+      "expectations": [
+        "Punctuation (at least ':') is stripped from the queries before the Terrier retriever",
+        "The two backends are compared by rank or fused by rank, never by score",
+        "Fusion follows the pyterrier-fusion skill (RRFusion), with pyterrier-retrieval for the indexes",
+        "k1 and b are passed explicitly to both backends",
+        "Fusion uses RRFusion, not raw score addition",
+        "The push code uses the artifact to_hf API without executing it",
+        "The script runs to completion in the project venv"
+      ]
+    },
+    {
+      "id": 3,
+      "name": "reranking-caching",
+      "skills": [
+        "pyterrier-basics",
+        "pyterrier-reranking",
+        "pyterrier-caching"
+      ],
+      "prompt": "On vaswani in PyTerrier: take BM25 top-50 and rerank with (a) the sentence-transformers cross-encoder cross-encoder/ms-marco-MiniLM-L-6-v2 and (b) monoT5 (castorini/monot5-base-msmarco-10k) — CPU only, so restrict to the first 15 topics. Wrap both rerankers in a pyterrier-caching scorer cache so that re-running the Experiment is near-instant and prove it with timings. Then separately train a learning-to-rank model with LightGBM using BM25, DPH and PL2 scores as features (feature union), training on half the vaswani topics and testing on the other half. Evaluate everything with nDCG@10 and MAP in pt.Experiment with BM25 as baseline. Give me one script I can re-run.",
+      "expected_output": "Script with text_loader before rerankers, ScorerCache around each scorer, timing evidence of cache hits, a ** feature union with LightGBM fit on a topic split, one Experiment.",
+      "expectations": [
+        "A text column is added before each reranker",
+        "The cache wraps the scorer and the second run is measurably faster",
+        "LTR trains on one topic subset and evaluates on a disjoint subset",
+        "The script runs to completion in the project venv"
+      ]
+    },
+    {
+      "id": 4,
+      "name": "expansion-rag",
+      "skills": [
+        "pyterrier-basics",
+        "pyterrier-expansion",
+        "pyterrier-rag"
+      ],
+      "prompt": "Two things in PyTerrier on vaswani. (1) Compare BM25 against BM25 with RM3 and BM25 with Bo1 pseudo-relevance feedback (fb_terms=10, fb_docs=3), and also a doc2query-- style document expansion on a 200-document slice using a small T5 doc2query model if the skill shows how (skip with a note if it needs a GPU). Evaluate with nDCG@10 and MAP and show the rewritten query for topic 1 with the original restored afterwards. (2) Build a small retrieval-augmented generation pipeline: BM25 top-3 with document text, fed to a small seq2seq reader (google/flan-t5-small is fine on CPU) that answers the question, and run it on 3 vaswani topics printing the generated answers. If pyterrier-rag has an evaluation measure for generated answers, show how it would be used. Give me one script I can re-run.",
+      "expected_output": "Script with RM3/Bo1 pipelines using pt.rewrite.reset() after expansion, optional doc2query on a slice, a pyterrier-rag reader pipeline printing answers, and a note on RAG measures.",
+      "expectations": [
+        "RM3 and Bo1 are followed by the retriever and pt.rewrite.reset() restores query_0",
+        "The RAG pipeline is run over the 3 topics with .transform(topics), not .search()",
+        "The RAG reader receives qid, query and text columns and produces an answer column",
+        "The script runs to completion in the project venv"
+      ]
+    },
+    {
+      "id": 5,
+      "name": "dense-splade",
+      "skills": [
+        "pyterrier-basics",
+        "pyterrier-dense",
+        "pyterrier-splade"
+      ],
+      "prompt": "On a 60-document slice of vaswani, index with a small dense encoder (pick the cheapest the skill offers on CPU; sentence-transformers/all-MiniLM-L6-v2 via pyterrier-dr if the skill supports arbitrary sentence-transformers models) and retrieve for 2 queries; then use the same model as a scorer to rerank BM25 top-10; then run vector PRF. Do the same slice with SPLADE (naver/splade-cocondenser-ensembledistil) into a PISA index with the skill's recommended settings and retrieve for the same 2 queries, then use splade.scorer() to rerank BM25 top-10.",
+      "expected_output": "Two small scripts; FlexIndex built once and queried with the same encoder; VectorPrf after vec_loader; SPLADE PISA index built with stemmer='none' and queried via quantized(); scorer reranks after text_loader.",
+      "expectations": [
+        "The BM25 first stage for the rerank is built over the 60-document slice, or the full prebuilt vaswani BM25 is stated to be a stand-in",
+        "SPLADE returning fewer than 60 documents is explained as zero-score documents being omitted",
+        "The dense query encoder is the same model as the document encoder",
+        "The SPLADE PISA index is created with stemmer='none'",
+        "Each scorer is preceded by a text loader",
+        "The scripts run to completion in the project venv"
+      ]
+    },
+    {
+      "id": 6,
+      "name": "colbert-pylate",
+      "prompt": "I want to try lightonai/GTE-ModernColBERT-v1 in PyTerrier through PyLate (lightonai/pyterrier-pylate). Set up whatever Python environment it needs without breaking the project venv. On a 60-document slice of vaswani, build a PLAID index with it and retrieve for 2 vaswani queries. Then rerank BM25 top-10 for the same 2 queries in two ways: from the embeddings in the PLAID index, and from the document text without the index; explain why the two rerankers return different numbers of rows. Tell me whether I could also load the prebuilt pyterrier/vaswani.colbertv2 index in the same environment, and show (don't run) how I'd share my PLAID index on Hugging Face so others query it with the right model.",
+      "expected_output": "A separate venv with pyterrier-pylate installed from git; a script that indexes the slice with doc_encoder() >> PlaidIndex, retrieves with query_encoder() >> index.retriever(k), reranks with query_encoder() >> index.scorer() and text_loader() >> text_scorer(); an explanation that index.scorer() drops candidates outside the 60 indexed documents; a no to loading .colbertv2 (pyterrier_colbert2, transformers<5); and index.to_hf(...) code with the model name recorded on the card.",
+      "expectations": [
+        "The two vaswani queries are retrieved with .transform(topics) and keep distinct qids",
+        "The PyLate environment installs pyterrier[java] (or pyterrier[all]) so the Terrier BM25 works",
+        "The transformers requirement is stated as pylate's pin (<=5.3), not as 'transformers 5'",
+        "pyterrier-pylate is installed from git into a separate environment, not with `pip install pyterrier-pylate` and not into the project venv",
+        "model.query_encoder() comes before index.retriever() and index.scorer()",
+        "A text loader comes before model.text_scorer()",
+        "The answer says index.scorer() drops BM25 candidates that are not in the 60-document index",
+        "The answer says the .colbertv2 index needs pyterrier_colbert2, which needs transformers<5 and so a different environment",
+        "The sharing code uses index.to_hf(...) and records the model name, since the index does not store it",
+        "The scripts run to completion in the new environment"
+      ],
+      "skills": [
+        "pyterrier-basics",
+        "pyterrier-colbert",
+        "pyterrier-huggingface"
+      ]
+    },
+    {
+      "id": 7,
+      "name": "local-index-punctuation",
+      "skills": [
+        "pyterrier-basics",
+        "pyterrier-retrieval",
+        "pyterrier-experiments"
+      ],
+      "prompt": "I want to understand how much the lexical backend matters on BEIR scifact (irds:beir/scifact/test) in PyTerrier, with indexes I build myself (don't download prebuilt ones). Build a Terrier index locally with the default indexer settings, a second Terrier index with stemmer=\"EnglishSnowballStemmer\", and a PISA index of the same corpus. Run BM25 with k1=0.9, b=0.4 on all test topics on all three (several topics contain ':' and other punctuation, keep them all), and give me nDCG@10 and R@100 in one pt.Experiment with the default Terrier index as baseline. Also report, per backend, how many topics returned no results, and the mean top-10 overlap between each pair of backends. Before indexing, print one document so I can see the field names. Give me one script I can re-run.",
+      "expected_output": "One script: three local indexes, a pt.apply.query punctuation strip before the Terrier retrievers, k1/b passed explicitly to every bm25(), one Experiment with baseline and correction, empty-result counts and pairwise top-10 overlap computed by rank.",
+      "expectations": [
+        "Punctuation is stripped before the Terrier retrievers, and no run is aborted by IllegalStateException or Unknown field",
+        "k1 and b are passed explicitly to all three bm25() calls",
+        "The first document is printed with a for loop or iter(), not next() on get_corpus_iter()",
+        "Backends are compared by rank (overlap), and scores are not claimed to be comparable",
+        "The script runs to completion in the project venv"
+      ]
+    },
+    {
+      "id": 8,
+      "name": "suiteeval-lazy-cache",
+      "max_turns": 300,
+      "skills": [
+        "pyterrier-basics",
+        "pyterrier-experiments",
+        "pyterrier-caching",
+        "pyterrier-reranking"
+      ],
+      "prompt": "Using PyTerrier and SuiteEval, run two systems over the NanoBEIR scifact and nfcorpus datasets: BM25, and BM25 top-20 reranked by monoELECTRA (pyterrier_dr.ElectraScorer, CPU only). Use index_dir and save_dir so indexes and runs are reused. Wrap the reranker in a pyterrier-caching scorer cache with a lazily loaded model so that running the script a second time loads no model at all; prove it with the cache's hit/miss output and wall time for both runs. Report nDCG@10 per dataset and the Overall row, with BM25 as baseline. Give me one script I can re-run.",
+      "expected_output": "One script: NanoBEIR(pipelines, eval_metrics=[nDCG@10], index_dir=..., save_dir=..., subset or two datasets), named pipelines, index.built() check, ScorerCache around text_loader >> Lazy model with declared columns, verbose=True hit/miss lines, two timed runs.",
+      "expectations": [
+        "Pipelines yielded by the factory are named and the factory checks index.built() before indexing",
+        "The scorer cache wraps the text loader and the model, and the Lazy model declares transform_outputs (or equivalent) so a fully cached run loads no model",
+        "The second run reports 0 misses and is measurably faster",
+        "The suite is called as NanoBEIR(pipelines, ...), not as a class",
+        "The script runs to completion in the project venv"
+      ]
+    },
+    {
+      "id": 9,
+      "name": "fusion",
+      "skills": [
+        "pyterrier-basics",
+        "pyterrier-fusion",
+        "pyterrier-dense",
+        "pyterrier-retrieval",
+        "pyterrier-experiments"
+      ],
+      "prompt": "On the first 500 documents of vaswani in PyTerrier (CPU only): build a BM25 index over just those 500 documents and a dense FlexIndex over the same documents with sentence-transformers BAAI/bge-small-en-v1.5 through pyterrier-dr, deciding and justifying whether the index needs sim_fn=\"cos\". Retrieve for the first 10 vaswani topics with both. Then fuse them two ways: reciprocal rank fusion, and a weighted score interpolation whose weight you choose on topics 11-30 and apply to topics 1-10. Separately, take BM25 top-20 over the 500 documents, rerank it with cross-encoder/ms-marco-MiniLM-L-6-v2 and with the dense model as a scorer, and fuse those two reranked lists with RRF without running BM25 twice. Evaluate every single system and every fusion on topics 1-10 in one pt.Experiment (nDCG@10, MAP) with BM25 as baseline. Give me one script I can re-run.",
+      "expected_output": "One script: slice index for both backends, SBertBiEncoder with a norm check or a justified sim_fn, retrieval via .transform(topics), pta.RRFusion and a per-query min-max interpolation (not pta.fusion.PerQueryMaxMinScore, which is broken), weight chosen on held-out topics, rerankers over a cached or frame-fused BM25 top-20, one Experiment with baseline and correction.",
+      "expectations": [
+        "sim_fn is justified with a norm check or model evidence, and the same encoder is used for documents and queries",
+        "No raw score addition: fusion is RRF or normalised interpolation, and pta.fusion.PerQueryMaxMinScore is not used (or its ImportError is handled)",
+        "The interpolation weight is chosen on topics other than the reported ones",
+        "The reranker fusion does not run BM25 twice (RetrieverCache, or rr_fusion on result frames)",
+        "The dense rerank uses model.scorer() after a text loader",
+        "All queries are run with .transform(topics), and the script runs to completion in the project venv"
+      ]
+    }
+  ]
+}

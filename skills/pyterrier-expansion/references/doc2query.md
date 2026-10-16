@@ -14,13 +14,13 @@ and PyTerrier 1.1.2, on CPU over two vaswani documents.
 
 ```bash
 pip install pyterrier-doc2query protobuf pyterrier-dr    # pyterrier-dr provides the ElectraScorer used by Doc2Query--
-# Doc2Query-- (QueryScorer) needs the GitHub version until a release after 0.2.0:
+# only if QueryScorer raises KeyError: 'docno' on one document (section 5):
 pip install git+https://github.com/terrierteam/pyterrier_doc2query.git
 ```
 
-- The GitHub version also reports `0.2.0`, so the version number doesn't tell you whether you have
-  the fix. Check for `'docno': []` in `pyterrier_doc2query/filtering.py`, or just run `QueryScorer` on
-  one document.
+- Run `QueryScorer` on one document first. PyPI 0.2.0 with `pyterrier_dr.ElectraScorer()` works with
+  PyTerrier 1.1.2. The GitHub version also reports `0.2.0`, so the version number doesn't tell you whether
+  you have the fix; check for `'docno': []` in `pyterrier_doc2query/filtering.py`.
 - `protobuf` is required with transformers 5. The default checkpoint ships only a SentencePiece file
   (`spiece.model`). Without `protobuf`, loading the tokenizer fails with the misleading
   `ValueError: Error parsing line b'\x0e' in …/spiece.model`, which comes from the tiktoken parser.
@@ -107,6 +107,6 @@ for t in [low, high]:      # try thresholds without regenerating
 | Symptom | Cause | Fix |
 |---|---|---|
 | `ValueError: Error parsing line b'\x0e' in …/spiece.model` | transformers 5 without `protobuf` | `pip install protobuf` |
-| `KeyError: 'docno'` from `QueryScorer` | bug in pyterrier-doc2query 0.2.0 (PyPI) | install from GitHub master |
+| `KeyError: 'docno'` from `QueryScorer` | a bug in some pyterrier-doc2query 0.2.0 installs; PyPI 0.2.0 with `ElectraScorer()` works | install from GitHub master only if the one-document test fails |
 | Indexed documents look unexpanded | `append=False` and no `QueryFilter(append=True)` | set `append=True` on `Doc2Query`, or add the filter |
 | Generation takes days | a full corpus on CPU, or too many samples | GPU; `fast_tokenizer=True`; cache with `IndexerCache`; use a prebuilt index |

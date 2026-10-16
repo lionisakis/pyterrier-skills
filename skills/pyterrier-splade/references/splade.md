@@ -32,7 +32,7 @@ documents and queries.
 |---|---|---|
 | `splade.doc_encoder()` | documents with `text` | `toks`: dict of wordpiece to integer weight, e.g. `{'compact': 257, 'memories': 177}` |
 | `splade.query_encoder()` | queries with `query` | `query_toks`: wordpiece to float weight (×100), for the query |
-| `splade.scorer(text_field="text", batch_size=100)` | results with `query` and `text` | a SPLADE score, to rerank without an index |
+| `splade.scorer(text_field="text", batch_size=100)` | results with `query` and `text` | a SPLADE score at scale 1 (the raw dot product), to rerank without an index |
 
 The terms are wordpieces from SPLADE's vocabulary, not words. They must not be stemmed or stopped again.
 
@@ -52,7 +52,8 @@ retriever = splade.query_encoder() >> index.quantized()
 - Calling `quantized()` builds a `quantized.*` structure inside the index folder.
 - Scales stack: `doc_encoder(scale=100)` already emits integer weights ×100, and PISA's
   `toks_indexer(scale=100.0)` multiplies and truncates them again; `query_encoder(scale=100)` ×
-  `quantized(toks_scale=100)` does the same for queries. Rankings are unaffected, but scores are about 1e8.
+  `quantized(toks_scale=100)` does the same for queries. Rankings are unaffected, but scores are about 1e8 × the raw dot
+  product (1e8–1e9), so `scorer()` and `quantized()` scores can't be compared or mixed.
 - PISA's `toks_indexer()` raises `ValueError: To index from dicts, you must set stemmer='none'` unless the
   index was created with `stemmer="none"`. To rebuild, use `toks_indexer(mode="overwrite")`.
 

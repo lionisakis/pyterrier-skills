@@ -134,4 +134,4 @@ For Doc2Query-- (scoring generated queries with a relevance model and dropping t
 | Expansion changes nothing | `fb_docs` too small, or the first stage returns few results | check the first stage's results; tune `fb_docs` and `fb_terms` |
 | Indexed doc2query documents look unexpanded | `append=False` without a filter step | `Doc2Query(append=True)` or add `QueryFilter(..., append=True)` |
 | `ValueError: Error parsing line b'\x0e' in …/spiece.model` when creating `Doc2Query` | transformers 5 without `protobuf` | `pip install protobuf` |
-| `KeyError: 'docno'` from `QueryScorer` | bug in pyterrier-doc2query 0.2.0 on PyPI | install from GitHub; see references/doc2query.md |
+| `KeyError: 'docno'` from `QueryScorer` | a bug in some pyterrier-doc2query 0.2.0 installs (PyPI 0.2.0 with `pyterrier_dr.ElectraScorer()` works) | only if `QueryScorer` fails on one document, install from GitHub; see references/doc2query.md |

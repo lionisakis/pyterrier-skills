@@ -154,6 +154,9 @@ check that the code works, not a result to report.
 
 - Don't add raw scores from different systems (`bm25 + dense`). Their scales differ; fuse by rank or normalise first.
 - Don't fuse pipelines whose `query` column differs (one after RM3, one not) without `pt.rewrite.reset()`.
+  `reset()` needs `query_0`, which rewriters and `pt.apply.query` save.
+- Don't transform the query on one branch only (e.g. stripping `:` before Terrier). `rr_fusion` merges on
+  `qid`, `query` and `docno`, so every document appears twice with half its score. Transform the topics, or every branch.
 - Don't pass frames without a `query` column to `rr_fusion`. Merge the topics in first.
 - Don't use `pta.fusion.PerQueryMaxMinScore` with pyterrier-alpha 0.16.5. It raises `ImportError`.
 - Don't use `|` or `&` when you need scores. They return documents only.
@@ -166,7 +169,7 @@ check that the code works, not a result to report.
 | Symptom | Cause | Fix |
 |---|---|---|
 | `KeyError: "['query'] not in index"` from `rr_fusion` | a frame has no `query` column (e.g. read with `pt.io.read_results`) | `run.merge(topics, on="qid")` first |
-| Fused list has nearly twice the documents, same docno twice per query | the inputs carry different `query` text for the same `qid` | `pt.rewrite.reset()` before fusing |
+| Fused list has nearly twice the documents, same docno twice per query | the inputs carry different `query` text for the same `qid` | `pt.rewrite.reset()` before fusing, or apply the query transform to the topics or every branch |
 | `ImportError: cannot import name 'validate' from 'pyterrier_alpha.validate'` | `PerQueryMaxMinScore` in pyterrier-alpha 0.16.5 | the `pt.apply.by_query` min-max above |
 | Fused results stop at 1000 per query | `num_results=1000` default | `RRFusion(..., num_results=None)` |
 | A shared first stage runs once per input | `RRFusion` calls each input pipeline | `RetrieverCache` around the shared stage, or `rr_fusion` on frames |

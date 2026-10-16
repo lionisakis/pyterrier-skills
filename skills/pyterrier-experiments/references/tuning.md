@@ -24,7 +24,8 @@ pt.KFoldGridSearch(pipeline, params, topics_list, qrels, metric="map", jobs=1, b
 - `GridSearch` returns the pipeline set to its best values (`return_type="opt_pipeline"`), the best
   `(score, [(transformer, param, value), ...])` (`"best_setting"`; get the values with
   `{p: v for _, p, v in settings}`), or both. It also prints the best value and setting.
-- `GridScan` returns a DataFrame with one row per combination and one column per metric. Use it to
+- `GridScan` returns a DataFrame with one row per combination, one column per metric and one column per
+  parameter, named `tran_<i>_<param>` (e.g. `tran_0_bm25.b`). Use it to
   see how sensitive a pipeline is to a parameter. **It leaves the transformer set to the last value it
   tried**, so create the retriever again before using it for anything else. To get both the curve and
   the best value in one pass, run `GridScan` once and take the row with the highest score.

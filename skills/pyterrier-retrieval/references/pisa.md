@@ -40,7 +40,7 @@ threads=1, overwrite=False)`:
   line of `{index.path}/data.properties` (`pyterrier/vaswani.terrier` has `Stopwords,PorterStemmer`,
   i.e. Porter v1). If it's Porter v1, rebuild the Terrier index yourself with Porter2 or report the mismatch. Use `"none"` for learned sparse or non-English text. Even with k1, b, stemmer and
   stopwords matched, the tokenisers still differ (PISA exposes no tokeniser option), so scores and top-10s
-  diverge (nfcorpus, k1=0.9 b=0.4, Porter2 both sides, 308 test queries: scores ≈ 0.70 ×; top-10
+  diverge (nfcorpus, k1=0.9 b=0.4, Porter2 both sides, 323 test queries: scores ≈ 0.70 ×; top-10
   overlap 0.84 as the mean over queries of shared docnos ÷ 10, or 0.95 as mean Jaccard). Say which
   overlap you report. Compare by rank, not by score.
 - `stops`: the Terrier English stopword list by default. Pass `"none"` or a list to change it. Keep it

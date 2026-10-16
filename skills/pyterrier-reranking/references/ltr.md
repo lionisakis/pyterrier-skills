@@ -58,6 +58,8 @@ ranker.fit(train_topics, qrels, valid_topics, qrels)
   passed to the learner as `eval_set` and `eval_group`. That is LightGBM's interface, and what its
   early stopping uses. LightGBM 4.7 prints a harmless `LGBMDeprecationWarning` that `eval_set` is
   deprecated in favour of `eval_X`/`eval_y`; PyTerrier still passes `eval_set` and the fit works.
+  If the task defines only train and test topics, take the validation topics from the training half:
+  they only drive early stopping and are never reported.
 - After `fit`, the pipeline ranks by the model's prediction.
 - A learner fits one feature layout. After changing the features, create a new learner object.
 
