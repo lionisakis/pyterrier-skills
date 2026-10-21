@@ -176,8 +176,10 @@ def render(iteration: Path, spec: dict, deadline: datetime | None, only: str | N
     cache = matrix.read_json(iteration / CACHE_FILE, {}) or {}
     dirs = matrix.condition_dirs(iteration, spec)
     rate, rate_prev = sec_per_weight(dirs, spec), None
-    prev = iteration.parent / f"pipelines-{int(iteration.name.split('-')[1]) - 1}"
-    if rate is None and prev.exists():   # fall back to the previous batch's measured rate
+    # the previous batch of the same name (pipelines-3 for pipelines-4, sonnet-5.5-pipeline-1 has none before it)
+    stem, _, n = iteration.name.rpartition("-")
+    prev = iteration.parent / f"{stem}-{int(n) - 1}" if n.isdigit() else None
+    if rate is None and prev and prev.exists():   # fall back to the previous batch's measured rate
         rate_prev = sec_per_weight(matrix.condition_dirs(prev, spec), spec)
     rows = [condition_row(rd, spec, cache, rate or rate_prev, meta) for rd in dirs]
     if rate is None and rate_prev:
