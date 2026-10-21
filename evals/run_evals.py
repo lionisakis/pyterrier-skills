@@ -38,7 +38,7 @@ import threading
 import time
 import urllib.error
 import urllib.request
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
@@ -128,16 +128,19 @@ class ProcTreeCpu(threading.Thread):
     a process that ends between samples loses at most that much CPU (wait4 still covers waited ones).
     """
 
-    def __init__(self, marker: str, period: float = 5.0):
+    def __init__(self, marker: str, period: float = 5.0, activity_log: Path | None = None):
         super().__init__(daemon=True)
         self.needle = f"{MARKER}={marker}\0".encode()
         self.period, self.stop = period, threading.Event()
         self.cpu: dict = {}     # (pid, starttime) -> (utime_s, stime_s)
         self.peak_rss = self.rss = 0
         self.tick, self.page = os.sysconf("SC_CLK_TCK"), os.sysconf("SC_PAGE_SIZE")
+        # one line per sample with the agent's live processes (not the claude CLI itself), so the report can
+        # tell index builds from pipeline runs and installs even when the agent runs them with `nohup ... &`
+        self.activity_log = activity_log
 
     def sample(self) -> None:
-        rss = 0
+        rss, live = 0, []
         for pid in filter(str.isdigit, os.listdir("/proc")):
             try:
                 with open(f"/proc/{pid}/environ", "rb") as f:
@@ -145,12 +148,20 @@ class ProcTreeCpu(threading.Thread):
                         continue
                 with open(f"/proc/{pid}/stat") as f:
                     fields = f.read().rsplit(")", 1)[1].split()
+                argv = Path(f"/proc/{pid}/cmdline").read_bytes().split(b"\0") if self.activity_log else []
             except OSError:
                 continue
             # fields after the command: state is [0], utime [11], stime [12], starttime [19], rss pages [21]
             self.cpu[(pid, fields[19])] = (int(fields[11]) / self.tick, int(fields[12]) / self.tick)
             rss += int(fields[21]) * self.page
+            cmd = " ".join(a.decode(errors="replace") for a in argv if a)
+            if cmd and os.path.basename(cmd.split()[0]) != "claude":
+                live.append({"pid": int(pid), "ppid": int(fields[1]), "cmd": cmd[:400],
+                             "cpu_s": round(sum(self.cpu[(pid, fields[19])]), 1)})
         self.rss, self.peak_rss = rss, max(self.peak_rss, rss)
+        if self.activity_log:
+            with self.activity_log.open("a", encoding="utf-8") as f:
+                f.write(json.dumps({"time": datetime.now(timezone.utc).isoformat(), "procs": live}) + "\n")
 
     def run(self) -> None:
         while not self.stop.wait(self.period):

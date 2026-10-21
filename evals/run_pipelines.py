@@ -273,7 +273,7 @@ def run_condition(spec: dict, cond: dict, cells: list[dict], iteration: Path, ar
         print(f"[{cond['id']}] (cd {project} && {' '.join(cmd)} < {run_dir / 'prompt.md'})")
         return {"condition": cond["id"], "status": "dry-run"}
 
-    tree = ProcTreeCpu(str(run_dir))
+    tree = ProcTreeCpu(str(run_dir), activity_log=run_dir / "activity.jsonl")
     tree.start()
     monitor = Monitor(run_dir, cells, spec, tree)
     monitor.start()
