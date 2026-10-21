@@ -19,9 +19,10 @@ that treats low CPU as idle from killing the batch.
 
 `--env-file` (default: the first `.env` found in this repo or its parent) is read as KEY=VALUE lines
 and passed to each `claude` process, overriding the current environment. Use it for
-ANTHROPIC_BASE_URL, ANTHROPIC_API_KEY and CLAUDE_CODE_AUTO_COMPACT_WINDOW. When it sets
-ANTHROPIC_API_KEY, each run also gets an empty CLAUDE_CONFIG_DIR: otherwise the CLI sends the saved
-claude.ai login instead of the key. Gateways that reject the default effort need `--effort`
+ANTHROPIC_BASE_URL, ANTHROPIC_API_KEY and CLAUDE_CODE_AUTO_COMPACT_WINDOW, or CLAUDE_CODE_OAUTH_TOKEN (from
+`claude setup-token`) for a claude.ai subscription. When it sets ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN,
+each run also gets an empty CLAUDE_CONFIG_DIR: otherwise the CLI sends the saved login instead, and the
+transcripts the reports read would land outside the run folder. Gateways that reject the default effort need `--effort`
 (the Glasgow gateway accepts low, medium or xhigh).
 """
 
@@ -376,7 +377,7 @@ def run_one(ev: dict, iteration: Path, model: str | None, max_turns: int, effort
     cmd = command(ev, run_dir, model, max_turns, effort)
     # a private PyTerrier home: ~/.pyterrier is a symlink into NFS here, and a stale mount breaks every Terrier call
     env = {"PYTERRIER_HOME": str(run_dir / "pyterrier_home"), **env, MARKER: str(run_dir)}
-    if "ANTHROPIC_API_KEY" in env:   # an empty config dir, so the key is used instead of a saved login
+    if "ANTHROPIC_API_KEY" in env or "CLAUDE_CODE_OAUTH_TOKEN" in env:   # an empty config dir, so the key or token is used
         env = {**env, "CLAUDE_CONFIG_DIR": str(run_dir / "claude-config")}
         (run_dir / "claude-config").mkdir(exist_ok=True)
     project = run_dir / "project"

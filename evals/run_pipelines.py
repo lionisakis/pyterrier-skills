@@ -266,7 +266,7 @@ def run_condition(spec: dict, cond: dict, cells: list[dict], iteration: Path, ar
     # pt.io.pyterrier_home() fail with FileExistsError for every Terrier call
     env = {"PYTERRIER_HOME": str(run_dir / "pyterrier_home"), **env, "BASH_MAX_TIMEOUT_MS": "600000",
            MARKER: str(run_dir)}   # lets ProcTreeCpu count background (nohup) jobs too
-    if "ANTHROPIC_API_KEY" in env:
+    if "ANTHROPIC_API_KEY" in env or "CLAUDE_CODE_OAUTH_TOKEN" in env:
         env["CLAUDE_CONFIG_DIR"] = str(run_dir / "claude-config")
         (run_dir / "claude-config").mkdir(exist_ok=True)
     if args.dry_run:
