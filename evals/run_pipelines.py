@@ -30,13 +30,14 @@ import argparse
 import concurrent.futures as cf
 import json
 import os
+import re
 import shutil
 import socket
 import subprocess
 import sys
 import threading
 import time
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -73,6 +74,7 @@ NUDGE = ("These cells are still missing (no valid run file in runs/<slug>/<pipel
 
 
 RETRY = "The last request failed with a server error. Continue the task where you left off."
+LIMIT_RESUME = "The usage limit has reset. Continue the task where you left off."
 
 
 INTERRUPTED = ("Your session was interrupted: the process was killed, and any background jobs you started were stopped "
@@ -90,6 +92,26 @@ def last_session(run_dir: Path) -> str | None:
 def api_error(res: dict) -> bool:
     """A run that ended on a gateway/API error rather than because the agent stopped."""
     return bool(res.get("is_error")) and str(res.get("result", "")).startswith("API Error")
+
+
+def limit_reset(res: dict) -> float | None:
+    """For a run a subscription limit stopped ("You've hit your session limit · resets 2:30pm (UTC)"): when it
+    resets, as a timestamp (now + 30 min if the time can't be read). None for any other result."""
+    text = str(res.get("result", ""))
+    if not (res.get("is_error") and re.search(r"hit your .{0,40}limit", text, re.I)):
+        return None
+    m = re.search(r"resets\s+(?:([A-Z][a-z]{2})\s+(\d{1,2}),?\s+)?(\d{1,2})(?::(\d{2}))?\s*(am|pm)", text, re.I)
+    now = datetime.now(timezone.utc)   # the CLI states the reset in the pod's zone, UTC on these nodes
+    if not m:
+        return (now + timedelta(minutes=30)).timestamp()
+    mon, day, hour, minute, ampm = m.groups()
+    hour = int(hour) % 12 + (12 if ampm.lower() == "pm" else 0)
+    at = now.replace(hour=hour, minute=int(minute or 0), second=0, microsecond=0)
+    if mon:
+        at = at.replace(month=datetime.strptime(mon, "%b").month, day=int(day))
+    while at < now - timedelta(minutes=5):   # a time of day already past means tomorrow
+        at += timedelta(days=1)
+    return at.timestamp()
 
 
 def next_batch(workspace: Path) -> Path:
@@ -282,6 +304,7 @@ def run_condition(spec: dict, cond: dict, cells: list[dict], iteration: Path, ar
     log = lambda m: print(f"[{cond['id']}] {m}", flush=True)  # noqa: E731
     started = time.time()
     results, exits, cpu_u, cpu_s, rss, nudges, api_retries = [], [], 0.0, 0.0, 0, 0, 0
+    limit_waits: list[dict] = []   # subscription-limit pauses: not the agent's time
     prompt = stdin_text = (run_dir / "prompt.md").read_text(encoding="utf-8")
     attempt_cmd, first, resumed = cmd, 0, None
     if args.resume:   # continue the killed session instead of starting over; keep its earlier state and result files
@@ -320,6 +343,24 @@ def run_condition(spec: dict, cond: dict, cells: list[dict], iteration: Path, ar
         monitor.log_states()
         missing = [f"{p}/{k}" for (p, k), s in monitor.last.items() if s not in ("done", "failed")]
         write_state(run_dir, attempts=len(results), exits=exits, nudges=nudges, api_retries=api_retries, missing=len(missing))
+        reset = limit_reset(res)
+        if reset is not None and len(limit_waits) < args.limit_waits:
+            # a subscription limit (session/weekly) is not the agent stopping: sleep until it resets, then continue
+            # the same session; the pause is recorded so timing.json and the time split leave it out
+            wait = max(reset - time.time(), 0) + 120
+            limit_waits.append({"from": matrix.now_iso(), "until": datetime.fromtimestamp(time.time() + wait, timezone.utc).isoformat()})
+            print(f"[{cond['id']}] usage limit, waiting {wait / 60:.0f} min: {str(res.get('result'))[:100]}", flush=True)
+            write_state(run_dir, state="waiting for usage limit", limit_waits=limit_waits)
+            time.sleep(wait)
+            limit_waits[-1]["until"] = matrix.now_iso()
+            write_state(run_dir, state="running", limit_waits=limit_waits)
+            if (res.get("num_turns") or 0) <= 1 and not resumed and len(results) == 1:   # refused at once: start over
+                stdin_text, attempt_cmd = prompt, cmd
+            elif (res.get("num_turns") or 0) <= 1:   # the message itself was refused: send it again
+                attempt_cmd = cmd + ["--resume", res["session_id"]] if res.get("session_id") else attempt_cmd
+            else:
+                stdin_text, attempt_cmd = LIMIT_RESUME, cmd + ["--resume", res["session_id"]]
+            continue
         if api_error(res) and api_retries < args.api_retries:
             # a gateway error (e.g. 503 "model is starting up") is not the agent stopping: wait and retry, no nudge;
             # also with no cells missing, since the agent may still have to evaluate and write its report
@@ -347,7 +388,8 @@ def run_condition(spec: dict, cond: dict, cells: list[dict], iteration: Path, ar
     monitor.join()
     if keepalive:
         keepalive.stop.set()
-    elapsed = time.time() - started
+    waited = sum(datetime.fromisoformat(w["until"]).timestamp() - datetime.fromisoformat(w["from"]).timestamp() for w in limit_waits)
+    elapsed = time.time() - started - waited
 
     merged = merge_results(results)
     (run_dir / "result.json").write_text(json.dumps(merged, indent=2), encoding="utf-8")
@@ -359,6 +401,7 @@ def run_condition(spec: dict, cond: dict, cells: list[dict], iteration: Path, ar
               "resumed": {k: resumed[k] for k in ("session", "at", "host", "previous_seconds")} if resumed else None,
               "gpu": gpu_status(), **monitor.result(), "nudges": nudges,
               "api_retries": api_retries, "keepalive_pings": keepalive.pings if keepalive else 0,
+              "limit_waits": limit_waits, "limit_wait_seconds": round(waited, 1),
               "attempts": len(results), "exits": exits}
     for k in ("total_cost_usd", "duration_ms", "num_turns", "usage"):
         timing[k] = merged.get(k)
@@ -383,6 +426,8 @@ def main() -> int:
     ap.add_argument("--max-nudges", type=int, default=3)
     ap.add_argument("--api-retries", type=int, default=10,
                     help="retries after a gateway error such as 503 'model is starting up' (backoff 1-10 min; not nudges)")
+    ap.add_argument("--limit-waits", type=int, default=20,
+                    help="times to sleep until a subscription usage limit resets and continue (not nudges)")
     ap.add_argument("--keepalive-min", type=float, default=10,
                     help="send a 1-token request this often while a condition runs, so the gateway keeps the model "
                          "awake while the agent waits on long jobs (0 = off)")

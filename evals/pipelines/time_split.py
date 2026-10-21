@@ -36,8 +36,9 @@ import matrix  # noqa: E402
 from report import BUILDS, read_rows  # noqa: E402
 
 CATEGORIES = ("agentic_coding", "index_build", "pipeline_run", "build_and_run", "setup", "download", "other")
-# label ids in priority order (higher wins); "down" = between a killed session and its resume, not counted
-DOWN, INDEX, MIXED, PIPELINE, DOWNLOAD, SETUP, LLM, OTHER, IDLE = 9, 8, 7, 6, 5, 4, 3, 2, 0
+# label ids in priority order (higher wins); "down" = between a killed session and its resume, and "limit" = waiting
+# for a subscription usage limit to reset (unless a job ran meanwhile): neither is counted
+DOWN, INDEX, MIXED, PIPELINE, DOWNLOAD, SETUP, LIMIT, LLM, OTHER, IDLE = 10, 9, 8, 7, 6, 5, 4, 3, 2, 0
 NAME = {INDEX: "index_build", MIXED: "build_and_run", PIPELINE: "pipeline_run", DOWNLOAD: "download", SETUP: "setup",
         LLM: "agentic_coding", OTHER: "other", IDLE: "other"}
 
@@ -209,6 +210,8 @@ def split(run_dir: Path, end: float | None = None) -> dict | None:
         last = max((t for t, _ in events if t < at), default=None)
         if last is not None:
             tl.mark(last, at, DOWN)
+    for w in st.get("limit_waits") or []:   # the runner slept until a usage limit reset
+        tl.mark(ts(w["from"]), ts(w["until"]), LIMIT)
 
     activity = run_dir / "activity.jsonl"
     source = "measured" if activity.exists() else "reconstructed"
@@ -238,10 +241,12 @@ def split(run_dir: Path, end: float | None = None) -> dict | None:
                 tl.mark(t, stop, label)
 
     secs = {k: 0 for k in CATEGORIES}
-    down = 0
+    down = limit = 0
     for label in tl.label:
         if label == DOWN:
             down += 1
+        elif label == LIMIT:
+            limit += 1
         else:
             secs[NAME[label]] += 1
     llm_total = sum(tl.llm)
@@ -251,7 +256,7 @@ def split(run_dir: Path, end: float | None = None) -> dict | None:
     tokens = {k: sum(u.get(f, 0) for u in usage) for k, f in
               (("input", "input_tokens"), ("cache_write", "cache_creation_input_tokens"),
                ("cache_read", "cache_read_input_tokens"), ("output", "output_tokens"))}
-    return {"source": source, "window_s": tl.n - down, "down_s": down, **{f"{k}_s": v for k, v in secs.items()},
+    return {"source": source, "window_s": tl.n - down - limit, "down_s": down, "limit_wait_s": limit, **{f"{k}_s": v for k, v in secs.items()},
             "llm_total_s": llm_total, "tokens": tokens}
 
 
@@ -288,7 +293,8 @@ def markdown(splits: dict[str, dict], fmt_s) -> list[str]:
         "How to read the time split:",
         "- Each second gets one label: index building > build + run > pipeline running > downloads > env setup > agentic coding "
         "(model generating) > other. Model turns taken while a job runs count as that job; LLM incl. overlap is all model time.",
-        "- other = polling, inspecting files, harness and API waits. Time between a killed session and its resume is left out.",
+        "- other = polling, inspecting files, harness and API waits. Time between a killed session and its resume, and waits "
+        "for a subscription usage limit to reset (when no job ran meanwhile), are left out.",
         "- measured = sampled processes (activity.jsonl); reconstructed = transcript plus background-job logs (approximate).",
         "- build + run = one script (or wrapper) that both builds indexes and runs pipelines; there is no reliable way to split it.", ""]
 
