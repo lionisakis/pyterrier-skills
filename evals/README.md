@@ -59,7 +59,7 @@ bash evals/pipelines/run_without_skills.sh                 # none, code, docs, d
 python evals/pipeline_status.py --watch 60 --deadline 23:30  # pipelines × datasets (x/8 conditions done, ▶ active, ✗ failed) + ETA
 python evals/pipeline_status.py --condition skills           # one condition's cells
 python evals/grade_pipelines.py --controls                   # pt.Experiment per condition × dataset, BM25 baseline, Bonferroni; agreement vs `all`
-python evals/pipeline_report.py                              # one row per condition: time, interaction, tokens, CPU/GPU, reuse, resources, quality
+python evals/pipeline_report.py                              # one row per condition: time, time split, interaction, tokens, CPU/GPU, reuse, resources, quality
 ```
 
 When an agent stops with cells missing, the runner resumes it with a fixed nudge (up to `--max-nudges`,

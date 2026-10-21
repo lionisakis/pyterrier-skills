@@ -8,7 +8,9 @@ run (BM25 on DL19), tool errors, context compactions, hook blocks, tokens per fi
 rules), doc reads, web calls, source-read leaks, SuiteEval use, installed versions and model
 substitutions, framework usage (pipelines/framework_usage.py: PyTerrier stack or hand-written, per
 component). Quality columns come from grade.json (run grade_pipelines.py first). A cell time table
-(minutes from first active to done, from status_log.jsonl) closes the report.
+(minutes from first active to done, from status_log.jsonl) closes the report. The time split
+(pipelines/time_split.py) divides the time to the first BM25 run and the whole run into agentic coding, index
+building, pipeline running, setup, downloads and other.
 
 Writes report.md and report.json into the batch folder.
 
@@ -33,6 +35,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent / "pipelines"))
 import framework_usage  # noqa: E402
 import matrix  # noqa: E402
+import time_split  # noqa: E402
 from report import agent_code, eval_report, fmt_s, read_rows  # noqa: E402
 
 VERSIONED = re.compile(r"^(python-terrier|pyterrier[\w-]*|pyt[\w-]*|ir[-_]datasets|ir[-_]measures|suiteeval|torch|transformers|"
@@ -140,6 +143,7 @@ def condition_report(rd: Path, spec: dict, cond: dict, grade: dict | None) -> di
                       "used_suiteeval": bool(re.search(r"\bsuiteeval\b", code))},
         "quality": quality,
         "framework": framework_usage.scan(rd),
+        "time_split": time_split.condition_split(rd),
         "repro": {"versions": versions(rd), "substituted_models": substituted},
     }
 
@@ -181,7 +185,8 @@ def markdown(batch: Path, spec: dict, reps: list[dict], meta: dict, graded: bool
                      f"{fmt_s(r['time']['wall_s'])} | {fmt_s(r['time']['llm_s'])} | {fmt_s(r['time']['tools_and_code_s'])} | "
                      f"{fmt_s(round(b['env_setup_s'])) if isinstance(b['env_setup_s'], (int, float)) else '–'} | "
                      f"{fmt_s(b['first_valid_run_s'])} | {idx} |")
-    lines += ["", "## Interaction and tokens", "",
+    lines += ["", *time_split.markdown({r["condition"]: r["time_split"] for r in reps}, fmt_s)]
+    lines += ["## Interaction and tokens", "",
               "| condition | human msgs | nudges | API retries | LLM turns | tool calls | tool errors | compactions | hook blocks | "
               "input | cache write | cache read | output | total | tokens/cell | cost est. |",
               "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
