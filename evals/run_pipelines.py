@@ -43,8 +43,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent / "pipelines"))
 from run_evals import (MARKER, REPO, SKILLS, TOOLS, CpuHeartbeat, KeepAlive, ProcTreeCpu, command,  # noqa: E402
-                       gpu_status, hardware_summary, load_env_file, memory_limit_gb, merge_cpu, model_status,
-                       ping_model, wait_for_model)
+                       gateway_request, gpu_status, hardware_summary, load_env_file, memory_limit_gb, merge_cpu,
+                       model_status, ping_model, wait_for_model)
 import matrix  # noqa: E402
 
 PIPES = REPO / "evals" / "pipelines"
@@ -92,6 +92,17 @@ def last_session(run_dir: Path) -> str | None:
 def api_error(res: dict) -> bool:
     """A run that ended on a gateway/API error rather than because the agent stopped."""
     return bool(res.get("is_error")) and str(res.get("result", "")).startswith("API Error")
+
+
+def gateway_load(env: dict[str, str], model: str) -> dict | None:
+    """Requests the gateway is running and queueing for `model` (ours included), or None without a gateway."""
+    _, data = gateway_request(env, "/models")
+    for m in data.get("data") or []:
+        if m.get("id") == model and isinstance(m.get("ida_llm_api"), dict):
+            a = m["ida_llm_api"]
+            return {"running": a.get("num_requests_running"), "waiting": a.get("num_requests_waiting"),
+                    "replicas": len(a.get("jobs") or [])}
+    return None
 
 
 def limit_reset(res: dict) -> float | None:
@@ -190,11 +201,14 @@ def write_state(run_dir: Path, **kw) -> None:
 
 
 class Monitor(threading.Thread):
-    """Samples GPU use every 5 s, logs cell state changes every 30 s and prints a heartbeat every 60 s."""
+    """Samples GPU use every 5 s, logs cell state changes every 30 s and prints a heartbeat every 60 s. With a
+    gateway, each heartbeat also logs its queue for the model to gateway_load.jsonl: on a shared gateway, model
+    time includes waiting behind other users' requests, which this shows."""
 
-    def __init__(self, run_dir: Path, cells: list[dict], spec: dict, tree: ProcTreeCpu | None = None):
+    def __init__(self, run_dir: Path, cells: list[dict], spec: dict, tree: ProcTreeCpu | None = None,
+                 gateway=None):
         super().__init__(daemon=True)
-        self.run_dir, self.cells, self.spec, self.tree = run_dir, cells, spec, tree
+        self.run_dir, self.cells, self.spec, self.tree, self.gateway = run_dir, cells, spec, tree, gateway
         self.stop = threading.Event()
         self.gpu_s = self.util_sum = 0.0
         self.samples = self.mem_peak = 0
@@ -243,6 +257,11 @@ class Monitor(threading.Thread):
             self.cpu_mark = (now, cpu)
         line += (f"  gpu {self.gpu_now[0]:.0f}%  vram {self.gpu_now[1] / 1024:.1f}/{self.gpu_now[2] / 1024:.0f} GB"
                  if self.gpu_now else "  gpu n/a")
+        load = self.gateway() if self.gateway else None
+        if load:
+            line += f"  gateway {load['running']} running / {load['waiting']} waiting"
+            with (self.run_dir / "gateway_load.jsonl").open("a", encoding="utf-8") as f:
+                f.write(json.dumps({"time": matrix.now_iso(), **load}) + "\n")
         print(line, flush=True)
 
     def run(self) -> None:
@@ -297,7 +316,8 @@ def run_condition(spec: dict, cond: dict, cells: list[dict], iteration: Path, ar
 
     tree = ProcTreeCpu(str(run_dir), activity_log=run_dir / "activity.jsonl")
     tree.start()
-    monitor = Monitor(run_dir, cells, spec, tree)
+    monitor = Monitor(run_dir, cells, spec, tree,
+                      gateway=(lambda: gateway_load(env, args.model)) if env.get("ANTHROPIC_BASE_URL") else None)
     monitor.start()
     keepalive = KeepAlive(env, args.model, args.keepalive_min, cond["id"]) if args.keepalive_min > 0 else None
     keepalive and keepalive.start()
