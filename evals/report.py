@@ -5,7 +5,7 @@ Writes report.md and report.json into the iteration folder. run_evals.py calls i
 every batch; run it by hand for an older or unfinished iteration.
 
 Per eval it reports
-    time        wall time, of which LLM time (API) and the rest (tools and code)
+    time        wall time, of which LLM time (model generating, from the transcripts) and the rest (tools and code)
     interaction human messages, LLM turns, tool calls by tool
     tokens      input, cache write, cache read, output; the CLI's cost estimate (costBasis may be
                 "unknown" for non-Anthropic gateways, so treat it as a token-volume indicator)
@@ -60,6 +60,33 @@ def read_rows(run: Path) -> list[dict]:
     for t in transcripts(run):
         rows += [json.loads(line) for line in t.read_text(encoding="utf-8").splitlines() if line.strip()]
     return rows
+
+
+def llm_seconds(run: Path) -> float | None:
+    """Time the model spent generating, from the transcripts: each assistant row closes the span that began at
+    the row before it (a prompt or tool result), and spans are merged across files (subagents, resumes).
+    result.json's duration_api_ms covers only the last segment of a session that continued after a background
+    task notification (e.g. 0 min for a 2.6 h run), so it is not used."""
+    spans = []
+    for path in transcripts(run):
+        prev = None
+        for line in path.read_text(encoding="utf-8").splitlines():
+            if not line.strip():
+                continue
+            r = json.loads(line)
+            if r.get("type") not in ("user", "assistant") or not r.get("timestamp"):
+                continue
+            t = datetime.fromisoformat(r["timestamp"].replace("Z", "+00:00")).timestamp()
+            if r["type"] == "assistant" and prev is not None and t > prev:
+                spans.append((prev, t))
+            prev = t
+    total, end = 0.0, None
+    for a, b in sorted(spans):
+        if end is None or a > end:
+            total, end = total + b - a, b
+        elif b > end:
+            total, end = total + b - end, b
+    return total if spans else None
 
 
 def agent_code(rows: list[dict]) -> list[str]:
@@ -187,7 +214,7 @@ def eval_report(run: Path, previous: Path | None) -> dict:
     }
 
     wall = timing.get("total_duration_seconds") or (result.get("duration_ms", 0) / 1000) or None
-    api = result.get("duration_api_ms", 0) / 1000 if wall else None
+    api = (llm_seconds(run) or result.get("duration_api_ms", 0) / 1000) if wall else None
     code = agent_code(rows)
     prev_numbers = outcome_numbers(previous) if previous else set()
     numbers = outcome_numbers(run)
@@ -356,7 +383,7 @@ def markdown(iteration: Path, evals: list[dict], meta: dict, deadline: datetime 
     lines += [
         "",
         "How to read it:",
-        "- **tools+code** is wall time minus LLM API time: running scripts, installs, downloads.",
+        "- **LLM** is the time the model spent generating, measured from the transcripts; **tools+code** is wall time minus that: running scripts, installs, downloads.",
         "- **prebuilt / cache / builds** counts calls in the code the agent wrote (from_hf, Artifact.load, "
         "*Cache, Lazy vs indexer/.index). More prebuilt and cache, fewer builds, is better.",
         "- **source reads** count site-packages reads and inspect/help probes: each is something the skill did not say.",
