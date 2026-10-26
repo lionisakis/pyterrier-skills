@@ -44,6 +44,7 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 SKILLS = REPO / "skills"
+EXT_SKILLS = REPO / "ext-skills"  # collected from extensions' pt_skills/ by scripts/collect_ext_skills.py
 EVALS = REPO / "evals" / "evals.json"
 TEMPLATE = REPO / "evals" / "agent_instructions.md"
 DEFAULT_WORKSPACE = REPO.parent / f"{REPO.name}-evals"
@@ -333,6 +334,14 @@ def load_evals() -> list[dict]:
     return json.loads(EVALS.read_text(encoding="utf-8"))["evals"]
 
 
+def skill_dirs() -> list[Path]:
+    """Every skill folder to install: skills/, with an ext-skills/ skill replacing the one of the same name."""
+    found = {p.name: p for p in SKILLS.iterdir() if (p / "SKILL.md").exists()}
+    if EXT_SKILLS.is_dir():
+        found.update({p.name: p for p in EXT_SKILLS.iterdir() if (p / "SKILL.md").exists()})
+    return [found[name] for name in sorted(found)]
+
+
 def next_iteration(workspace: Path) -> Path:
     existing = sorted(int(p.name.split("-")[1]) for p in workspace.glob("iteration-*") if p.is_dir())
     return workspace / f"iteration-{(existing[-1] + 1) if existing else 1}"
@@ -343,9 +352,8 @@ def prepare(run_dir: Path, ev: dict, max_turns: int) -> Path:
     project = run_dir / "project"
     skills_dst = project / ".claude" / "skills"
     skills_dst.mkdir(parents=True, exist_ok=True)
-    for skill in SKILLS.iterdir():
-        if (skill / "SKILL.md").exists():
-            shutil.copytree(skill, skills_dst / skill.name, dirs_exist_ok=True)
+    for skill in skill_dirs():
+        shutil.copytree(skill, skills_dst / skill.name, dirs_exist_ok=True)
     prompt = TEMPLATE.read_text(encoding="utf-8").format(
         python=PYTHON, workspace=run_dir, prompt=ev["prompt"]
     )

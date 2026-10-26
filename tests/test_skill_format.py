@@ -73,7 +73,7 @@ def test_relative_links_exist(skill: Path):
 
 @skill_param
 def test_skill_references_exist(skill: Path):
-    """Every skill named in a SKILL.md or references/*.md file is a folder under skills/."""
+    """Every skill named in a SKILL.md or references/*.md file is a folder under skills/ or ext-skills/."""
     known = {skill_name(s) for s in SKILLS}
     missing = set()
     for path in [skill, *sorted(skill.parent.glob("references/*.md"))]:

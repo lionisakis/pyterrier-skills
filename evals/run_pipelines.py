@@ -42,9 +42,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent / "pipelines"))
-from run_evals import (MARKER, REPO, SKILLS, TOOLS, CpuHeartbeat, KeepAlive, ProcTreeCpu, command,  # noqa: E402
+from run_evals import (MARKER, REPO, TOOLS, CpuHeartbeat, KeepAlive, ProcTreeCpu, command,  # noqa: E402
                        gateway_request, gpu_status, hardware_summary, load_env_file, memory_limit_gb, merge_cpu,
-                       model_status, ping_model, wait_for_model)
+                       model_status, ping_model, skill_dirs, wait_for_model)
 import matrix  # noqa: E402
 
 PIPES = REPO / "evals" / "pipelines"
@@ -170,9 +170,8 @@ def prepare(spec: dict, cond: dict, cells: list[dict], iteration: Path, base_pyt
     for sub in ("runs", "indexes", "scripts", "logs", "results"):
         (run_dir / sub).mkdir(exist_ok=True)
     if cond["skills"]:
-        for skill in SKILLS.iterdir():
-            if (skill / "SKILL.md").exists():
-                shutil.copytree(skill, project / ".claude" / "skills" / skill.name, dirs_exist_ok=True)
+        for skill in skill_dirs():
+            shutil.copytree(skill, project / ".claude" / "skills" / skill.name, dirs_exist_ok=True)
     if cond["docs"]:
         if not (DOCS / "index.json").exists():
             raise SystemExit(f"{DOCS} is missing: run `python evals/fetch_docs.py` first")
