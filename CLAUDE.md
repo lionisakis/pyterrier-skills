@@ -6,8 +6,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Agent skills that teach coding agents to develop with [PyTerrier](https://github.com/terrier-org/pyterrier)
 and its extensions. Skills follow the open [Agent Skills](https://agentskills.io/specification) format and
-are installed locally with the cross-agent `npx skills` CLI. There is no plugin marketplace and nothing is
-published. `pyproject.toml` only defines the dev environment and the test suite that checks skills.
+are installed with the cross-agent `npx skills` CLI, straight from the GitHub repo; there is no registry.
+`pyproject.toml` defines the dev environment and the test suite, and builds a docs-only wheel that carries
+`pt_docs/` for the PyTerrier docs (no Python code, no skills).
 
 Skills come in two layers (see README.md): stage skills (retrieval, fusion, expansion, reranking, rag) that
 compare options and route to the model-family skills (splade, dense, colbert, generative), which cover every role of one
@@ -22,13 +23,30 @@ skills/<skill-name>/SKILL.md   # one folder per skill, plus optional references/
 tests/skill_files.py           # helpers: find skills, parse frontmatter, extract code blocks
 tests/test_skill_format.py     # frontmatter, size and link rules
 tests/test_snippets.py         # python blocks must parse; `python run` blocks execute
-pyproject.toml                 # dev dependency group + pytest config (not a package)
+pyproject.toml                 # dev dependency group, pytest config, docs-only wheel (pt_docs/)
 evals/evals.json               # realistic task prompts; evals/run_evals.py runs them through `claude -p`
 evals/pipelines/               # pipeline-matrix evals (skills/docs/code-view ablation); evals/run_pipelines.py
+ext-skills/<skill-name>/       # GENERATED: skills copied from extensions' pt_skills/; never edit by hand
+ext-skills/manifest.json       # where each ext-skill came from, and whether it replaces a skills/ skill
+scripts/collect_ext_skills.py  # fills ext-skills/ from PyTerrier's docs/extensions.txt (weekly Action opens a PR)
+pt_docs/                       # this repo's page in the PyTerrier docs; skills.rst is generated
+scripts/build_pt_docs.py       # regenerates pt_docs/skills.rst from the frontmatter
+.github/workflows/             # collect-ext-skills.yml (weekly) and install-check.yml (after skills change)
 ```
 
-Never put a `SKILL.md` anywhere except `skills/<name>/SKILL.md`. The installer scans the repo root and
-nested folders, and a shallower `SKILL.md` shadows deeper ones; `test_no_stray_skill_files` enforces this.
+Never put a `SKILL.md` anywhere except `skills/<name>/SKILL.md` (and the generated
+`ext-skills/<name>/SKILL.md`). The installer scans the repo root and nested folders, and a shallower
+`SKILL.md` shadows deeper ones; `test_no_stray_skill_files` enforces this.
+
+## Extension skills
+
+Extensions can ship skills in `<package>/pt_skills/<name>/SKILL.md`, the way they ship `pt_docs/`
+(guide for authors: `pt_docs/authoring.rst`). `python scripts/collect_ext_skills.py` reads PyTerrier's
+`docs/extensions.txt` and copies every such folder into `ext-skills/` (`--from github`, the default, reads
+each repo's default branch; `--from installed` reads pip-installed packages like the docs build does). A
+collected skill replaces the `skills/` skill of the same name everywhere: `find_skills()`, the evals and
+the install. Fix a collected skill upstream in its extension, not here. After any skill or frontmatter
+change, run `python scripts/build_pt_docs.py` (a test fails if `pt_docs/skills.rst` is stale).
 
 ## Commands
 
@@ -41,6 +59,8 @@ uv run pytest -m run -k <skill>  # one skill
 python evals/run_evals.py --model opus   # agents do real tasks with the skills and report defects (see evals/README.md)
 npx skills add . --list          # preview what the installer finds
 npx skills add . --agent claude-code   # install into ./.claude/skills of the current project
+python scripts/collect_ext_skills.py     # refresh ext-skills/ (the weekly Action does this and opens a PR)
+python scripts/build_pt_docs.py          # regenerate pt_docs/skills.rst
 ```
 
 Run `npx skills add` from the project that should receive the skills, passing this repo's path. From a
@@ -57,7 +77,7 @@ command after editing a skill. `-g` installs for the user instead of the project
    downloads/GPU). Run blocks in one file share a namespace and execute in order. Plain ```` ```python ````
    blocks may be fragments but must still parse.
 4. Add any new dependency (e.g. `pyterrier-dr`) to the `dev` group in `pyproject.toml`.
-5. `uv run pytest`, then `uv run pytest -m run -k <name>`.
+5. `python scripts/build_pt_docs.py`, `uv run pytest`, then `uv run pytest -m run -k <name>`.
 
 ## Improving a skill from agent runs
 

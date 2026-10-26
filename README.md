@@ -29,18 +29,43 @@ reranker or expansion. `pyterrier-basics` is the base skill: install it with any
 | `pyterrier-rag` | retrieval-augmented generation | done |
 | `pyterrier-caching` | caching expensive pipeline stages | done |
 
-## Install locally
+## Install
 
-From the project where you want the skills, point the installer at a checkout of this repo:
+From the project where you want the skills:
 
 ```bash
-npx skills add /path/to/pyterrier-skills --list                 # preview
-npx skills add /path/to/pyterrier-skills --agent claude-code    # install for Claude Code
+npx skills add cmacdonald/pyterrier-skills --list                 # preview
+npx skills add cmacdonald/pyterrier-skills --agent claude-code    # install for Claude Code
+npx skills check && npx skills update -y                          # later: pull changed skills
 ```
 
-The skills are copied into the project's `.claude/skills/` and recorded in `skills-lock.json`. Re-run the
-command to pick up changes from this checkout. Use `-g` to install them for your user instead of the
-project. The `skills` CLI needs Node 18 or newer.
+The skills are copied into the project's `.claude/skills/` and recorded in `skills-lock.json`. Install from
+GitHub as above: `npx skills update` skips skills installed from a local path (use a local path,
+`npx skills add /path/to/pyterrier-skills`, only to try uncommitted edits). Use `-g` to install them for
+your user instead of the project. The repo is private, so the CLI needs your git or `gh` login. The
+`skills` CLI needs Node 18 or newer. To update on every Claude Code session, add this hook to the
+project's `.claude/settings.json`:
+
+```json
+{"hooks": {"SessionStart": [{"hooks": [{"type": "command",
+  "command": "npx -y skills update -p -y >/dev/null 2>&1 || true"}]}]}}
+```
+
+## Extension skills
+
+PyTerrier extensions can ship their own skills in a `pt_skills/` folder inside the package, next to the
+`pt_docs/` folder the PyTerrier docs already collect. Every Monday the
+[collect-ext-skills](.github/workflows/collect-ext-skills.yml) Action reads PyTerrier's
+[`docs/extensions.txt`](https://github.com/terrier-org/pyterrier/blob/master/docs/extensions.txt), copies
+each `pt_skills/<name>/` into [`ext-skills/`](ext-skills/), and opens a PR. A collected skill replaces our
+skill of the same name. Once merged, `npx skills update` delivers it. How to write one:
+[`pt_docs/authoring.rst`](pt_docs/authoring.rst).
+
+## PyTerrier docs page
+
+[`pt_docs/`](pt_docs/) is this repo's page for the PyTerrier docs, in the same form as every extension's
+`pt_docs/`. `uv build` makes a docs-only wheel (`pyterrier_skills/pt_docs/`); listing it on
+readthedocs needs the repo public, the wheel on PyPI, and a line in PyTerrier's `docs/extensions.txt`.
 
 ## Develop
 
