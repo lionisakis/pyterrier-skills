@@ -95,8 +95,9 @@ def fetch(url: str, api: bool = False) -> bytes:
     token = os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN")
     if api:
         req.add_header("Accept", "application/vnd.github+json")
-        if token:
-            req.add_header("Authorization", f"Bearer {token}")
+    # Only GitHub's own hosts get the token; it is what lets private repos be read at all.
+    if token and urllib.parse.urlsplit(url).hostname in {"api.github.com", "raw.githubusercontent.com"}:
+        req.add_header("Authorization", f"Bearer {token}")
     with urllib.request.urlopen(req, timeout=30) as resp:
         return resp.read()
 
@@ -162,22 +163,27 @@ def github_skills(ext: Extension) -> tuple[list[Skill], str]:
         # HEAD is the default branch; one API call per repo keeps unauthenticated runs under the limit.
         listing = json.loads(fetch(f"https://api.github.com/repos/{owner}/{repo}/git/trees/HEAD?recursive=1", api=True))
     except urllib.error.HTTPError as e:
-        return [], f"GitHub API error {e.code}"
+        if e.code == 404:  # repo gone, renamed or not visible to the token: it ships no skills
+            return [], "repo not found"
+        raise SystemExit(f"{owner}/{repo}: GitHub API error {e.code}; not collecting, so its skills are not dropped")
     if listing.get("truncated"):
         print(f"warning: tree listing of {owner}/{repo} is truncated", file=sys.stderr)
     tree = listing["tree"]
     skills = []
-    for folder, sha in sorted(skill_folders(tree).items()):
-        prefix = folder + "/"
-        files = {
-            safe_relpath(e["path"][len(prefix):]): fetch(
-                f"https://raw.githubusercontent.com/{owner}/{repo}/HEAD/{urllib.parse.quote(e['path'])}"
-            )
-            for e in tree
-            if e["type"] == "blob" and e["path"].startswith(prefix)
-            and not IGNORED_PARTS.intersection(PurePosixPath(e["path"]).parts)
-        }
-        skills.append(Skill(folder.rsplit("/", 1)[1], ext.package or ext.name, f"{owner}/{repo}@{sha[:12]}", files))
+    try:
+        for folder, sha in sorted(skill_folders(tree).items()):
+            prefix = folder + "/"
+            files = {
+                safe_relpath(e["path"][len(prefix):]): fetch(
+                    f"https://raw.githubusercontent.com/{owner}/{repo}/HEAD/{urllib.parse.quote(e['path'])}"
+                )
+                for e in tree
+                if e["type"] == "blob" and e["path"].startswith(prefix)
+                and not IGNORED_PARTS.intersection(PurePosixPath(e["path"]).parts)
+            }
+            skills.append(Skill(folder.rsplit("/", 1)[1], ext.package or ext.name, f"{owner}/{repo}@{sha[:12]}", files))
+    except urllib.error.HTTPError as e:
+        raise SystemExit(f"{owner}/{repo}: download error {e.code} for {e.url}; not collecting")
     return skills, f"{len(skills)} skill(s)" if skills else "no pt_skills"
 
 

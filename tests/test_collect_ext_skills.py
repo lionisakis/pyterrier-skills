@@ -136,3 +136,20 @@ def test_verify_install(tmp_path):
     assert collector.verify_install(installed) == []
     (installed / "pyterrier-basics" / "SKILL.md").write_text("changed")
     assert collector.verify_install(installed) == ["pyterrier-basics/SKILL.md: differs from skills/pyterrier-basics/SKILL.md"]
+
+
+@pytest.mark.parametrize("code, result", [(404, "repo not found"), (500, SystemExit), (403, SystemExit)])
+def test_github_errors_never_drop_skills_silently(monkeypatch, code, result):
+    """Only a missing repo counts as "no skills"; rate limits and outages fail the run instead."""
+    import urllib.error
+
+    def fail(url, api=False):
+        raise urllib.error.HTTPError(url, code, "error", {}, None)
+
+    monkeypatch.setattr(collector, "fetch", fail)
+    ext = collector.Extension("pkg", "Pkg", "https://github.com/owner/repo")
+    if result is SystemExit:
+        with pytest.raises(SystemExit, match=f"GitHub API error {code}"):
+            collector.github_skills(ext)
+    else:
+        assert collector.github_skills(ext) == ([], result)
