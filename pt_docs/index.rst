@@ -8,7 +8,7 @@ retrieval, fusion, query and document expansion, reranking, RAG, caching and eva
 examples, a list of common mistakes and a troubleshooting table.
 
 You can install the skills into a project with the
-`skills CLI <https://github.com/vercel-labs/skills>`__ (Node 18+):
+`skills CLI <https://github.com/vercel-labs/skills>`__ (Node 22.20+):
 
 .. code-block:: console
    :caption: Install the PyTerrier skills for Claude Code

@@ -43,7 +43,7 @@ The skills are copied into the project's `.claude/skills/` and recorded in `skil
 GitHub as above: `npx skills update` skips skills installed from a local path (use a local path,
 `npx skills add /path/to/pyterrier-skills`, only to try uncommitted edits). Use `-g` to install them for
 your user instead of the project. The repo is private, so the CLI needs your git or `gh` login. The
-`skills` CLI needs Node 18 or newer. To update on every Claude Code session, add this hook to the
+`skills` CLI needs Node 22.20 or newer. To update on every Claude Code session, add this hook to the
 project's `.claude/settings.json`:
 
 ```json

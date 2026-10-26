@@ -65,7 +65,7 @@ python scripts/build_pt_docs.py          # regenerate pt_docs/skills.rst
 
 Run `npx skills add` from the project that should receive the skills, passing this repo's path. From a
 local path it copies each skill into `.claude/skills/` and records it in `skills-lock.json`, so re-run the
-command after editing a skill. `-g` installs for the user instead of the project. The CLI needs Node 18+.
+command after editing a skill. `-g` installs for the user instead of the project. The CLI needs Node 22.20+.
 
 ## Adding a skill
 
