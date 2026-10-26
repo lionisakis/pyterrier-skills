@@ -5,6 +5,21 @@ description = "Agent skills for developing with PyTerrier"
 requires-python = ">=3.10"
 dependencies = []
 
+# The wheel only carries pt_docs/ as pyterrier_skills/pt_docs, which PyTerrier's docs build copies in the
+# same way as every extension's pt_docs/ (docs/extras/generate_extensions.py). No Python code, no skills.
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+bypass-selection = true
+
+[tool.hatch.build.targets.wheel.force-include]
+"pt_docs" = "pyterrier_skills/pt_docs"
+
+[tool.hatch.build.targets.sdist]
+include = ["pt_docs", "README.md"]
+
 [dependency-groups]
 dev = [
     "pytest>=8",
@@ -33,7 +48,6 @@ dev = [
 ]
 
 [tool.uv]
-package = false
 # pyjnius 1.8.0 declares Python 3.12 support but ships only cp313/cp314 wheels and no sdist.
 constraint-dependencies = ["pyjnius<1.8"]
 
