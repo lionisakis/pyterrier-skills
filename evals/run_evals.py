@@ -44,7 +44,7 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 SKILLS = REPO / "skills"
-EXT_SKILLS = REPO / "ext-skills"  # collected from extensions' pt_skills/ by scripts/collect_ext_skills.py
+EXT_SKILLS = SKILLS / "ext"  # collected from extensions' pt_skills/ by scripts/collect_ext_skills.py
 EVALS = REPO / "evals" / "evals.json"
 TEMPLATE = REPO / "evals" / "agent_instructions.md"
 DEFAULT_WORKSPACE = REPO.parent / f"{REPO.name}-evals"
@@ -335,11 +335,11 @@ def load_evals() -> list[dict]:
 
 
 def skill_dirs() -> list[Path]:
-    """Every skill folder to install: skills/, with an ext-skills/ skill replacing the one of the same name."""
-    found = {p.name: p for p in SKILLS.iterdir() if (p / "SKILL.md").exists()}
+    """Every skill folder to install: skills/<name>/ and the collected skills/ext/<name>/ (names never repeat)."""
+    dirs = [p for p in SKILLS.iterdir() if (p / "SKILL.md").exists()]
     if EXT_SKILLS.is_dir():
-        found.update({p.name: p for p in EXT_SKILLS.iterdir() if (p / "SKILL.md").exists()})
-    return [found[name] for name in sorted(found)]
+        dirs += [p for p in EXT_SKILLS.iterdir() if (p / "SKILL.md").exists()]
+    return sorted(dirs, key=lambda p: p.name)
 
 
 def next_iteration(workspace: Path) -> Path:

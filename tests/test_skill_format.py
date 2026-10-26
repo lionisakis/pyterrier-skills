@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from skill_files import (
+    EXT_SKILLS_DIR,
     REPO_ROOT,
     find_skills,
     read_frontmatter,
@@ -73,7 +74,7 @@ def test_relative_links_exist(skill: Path):
 
 @skill_param
 def test_skill_references_exist(skill: Path):
-    """Every skill named in a SKILL.md or references/*.md file is a folder under skills/ or ext-skills/."""
+    """Every skill named in a SKILL.md or references/*.md file is a folder under skills/ or skills/ext/."""
     known = {skill_name(s) for s in SKILLS}
     missing = set()
     for path in [skill, *sorted(skill.parent.glob("references/*.md"))]:
@@ -89,3 +90,17 @@ def test_no_stray_skill_files():
     assert not stray, (
         f"SKILL.md outside skills/<name>/ would shadow or duplicate skills: {stray}"
     )
+
+
+def test_no_duplicate_skill_names():
+    """The CLI installs whichever same-named skill it reads first, so each name must exist once."""
+    names = [skill_name(s) for s in SKILLS]
+    duplicates = sorted({n for n in names if names.count(n) > 1})
+    assert not duplicates, (
+        f"skills in both skills/ and skills/ext/: {duplicates}; run scripts/collect_ext_skills.py, which "
+        "deletes our copy when an extension ships the same name"
+    )
+
+
+def test_ext_is_not_a_skill():
+    assert not (EXT_SKILLS_DIR / "SKILL.md").exists(), "skills/ext/ holds collected skills; it is not a skill"

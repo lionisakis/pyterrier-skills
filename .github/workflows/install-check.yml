@@ -1,10 +1,10 @@
 # After skills change: install this repo with the skills CLI into a scratch project and check it holds
-# exactly find_skills() — every skill, and the ext-skills/ copy where an extension replaces one of ours.
+# exactly find_skills() — every skill, including the collected skills/ext/ ones.
 name: Install check
 on:
   push:
     branches: [main, pt-skills]
-    paths: [skills/**, ext-skills/**, .github/workflows/install-check.yml]
+    paths: [skills/**, .github/workflows/install-check.yml]
   workflow_dispatch:
 env:
   DISABLE_TELEMETRY: "1"  # CI installs are not real installs

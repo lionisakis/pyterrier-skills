@@ -1,4 +1,4 @@
-# Weekly: copy every extension's pt_skills/ (listed in PyTerrier's docs/extensions.txt) into ext-skills/,
+# Weekly: copy every extension's pt_skills/ (listed in PyTerrier's docs/extensions.txt) into skills/ext/,
 # regenerate pt_docs/skills.rst, run the fast tests, and open or update one PR if anything changed.
 name: Collect extension skills
 on:
@@ -33,6 +33,6 @@ jobs:
           commit-message: Update extension skills from pt_skills
           body-path: ${{ runner.temp }}/changes.md
           add-paths: |
-            ext-skills/**
+            skills/**
             pt_docs/skills.rst
           delete-branch: true

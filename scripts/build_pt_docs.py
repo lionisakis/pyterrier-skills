@@ -3,7 +3,7 @@
 
 `pt_docs/` is this repo's page in the PyTerrier docs (readthedocs copies it like any extension's
 `pt_docs/`). The table covers the merged skill set from `tests/skill_files.py::find_skills`, so skills
-collected into `ext-skills/` appear with the package they came from. `tests/test_pt_docs.py` fails when
+collected into `skills/ext/` appear with the package they came from. `tests/test_pt_docs.py` fails when
 the committed file is out of date.
 
 Examples

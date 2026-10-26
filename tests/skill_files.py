@@ -10,8 +10,9 @@ import yaml
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SKILLS_DIR = REPO_ROOT / "skills"
-# Skills copied from extension packages' pt_skills/ by scripts/collect_ext_skills.py.
-EXT_SKILLS_DIR = REPO_ROOT / "ext-skills"
+# Skills copied from extension packages' pt_skills/ by scripts/collect_ext_skills.py. They live under
+# skills/ because the `skills` CLI only scans skills/ (three levels deep), the repo root and agent folders.
+EXT_SKILLS_DIR = SKILLS_DIR / "ext"
 
 # Folders never scanned for stray SKILL.md files.
 IGNORED_DIRS = {".git", ".venv", "node_modules", ".pytest_cache", "__pycache__"}
@@ -30,14 +31,13 @@ class CodeBlock:
 
 
 def find_skills() -> list[Path]:
-    """Every skills/<name>/SKILL.md and ext-skills/<name>/SKILL.md, sorted by skill name.
+    """Every skills/<name>/SKILL.md and collected skills/ext/<name>/SKILL.md, sorted by skill name.
 
-    An ext-skills/ skill replaces the skills/ one of the same name: the extension's copy matches the
-    version it ships with.
+    Names never repeat: the collector deletes skills/<name>/ when an extension ships the same name
+    (test_no_duplicate_skill_names), because the CLI installs whichever duplicate it reads first.
     """
-    found = {p.parent.name: p for p in SKILLS_DIR.glob("*/SKILL.md")}
-    found.update({p.parent.name: p for p in EXT_SKILLS_DIR.glob("*/SKILL.md")})
-    return [found[name] for name in sorted(found)]
+    return sorted([*SKILLS_DIR.glob("*/SKILL.md"), *EXT_SKILLS_DIR.glob("*/SKILL.md")],
+                  key=lambda p: (p.parent.name, p))
 
 
 def skill_name(path: Path) -> str:
@@ -93,8 +93,8 @@ def python_blocks(path: Path) -> list[CodeBlock]:
 
 
 def stray_skill_files() -> list[Path]:
-    """SKILL.md files anywhere except skills/<name>/SKILL.md and ext-skills/<name>/SKILL.md."""
-    allowed = set(SKILLS_DIR.glob("*/SKILL.md")) | set(EXT_SKILLS_DIR.glob("*/SKILL.md"))
+    """SKILL.md files anywhere except skills/<name>/SKILL.md and skills/ext/<name>/SKILL.md."""
+    allowed = set(find_skills())
     found = []
     for path in REPO_ROOT.rglob("SKILL.md"):
         if IGNORED_DIRS.intersection(path.relative_to(REPO_ROOT).parts):

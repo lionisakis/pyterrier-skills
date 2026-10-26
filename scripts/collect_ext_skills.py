@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Collect the agent skills that PyTerrier extensions ship in a `pt_skills/` folder into `ext-skills/`.
+"""Collect the agent skills that PyTerrier extensions ship in a `pt_skills/` folder into `skills/ext/`.
 
 Works like PyTerrier's `docs/extras/generate_extensions.py`, which copies each extension's `pt_docs/`
 folder into the readthedocs build. It reads the same `docs/extensions.txt` (`package # Name <url>` per
@@ -10,9 +10,10 @@ line) and looks for `pt_skills/<name>/SKILL.md` in each extension:
     --from installed   look in the pip-installed package, as the docs build does:
                        `importlib.resources.files(package) / "pt_skills"`.
 
-Each skill is copied to `ext-skills/<name>/`, replacing what was there; skills no longer provided are
-removed. A collected skill replaces the `skills/<name>/` skill of the same name (see
-`tests/skill_files.py::find_skills`). `ext-skills/manifest.json` records where each skill came from.
+Each skill is copied to `skills/ext/<name>/` (under `skills/` because that is where the `skills` CLI
+looks), replacing what was there; skills no longer provided are removed. Where an extension ships a
+name we also have, our `skills/<name>/` is deleted, since the CLI installs whichever duplicate it reads
+first. `skills/ext/manifest.json` records where each skill came from.
 The run fails, writing nothing, if a SKILL.md has bad frontmatter or two extensions ship the same name.
 
 Examples
@@ -187,7 +188,7 @@ def github_skills(ext: Extension) -> tuple[list[Skill], str]:
     return skills, f"{len(skills)} skill(s)" if skills else "no pt_skills"
 
 
-# --- writing ext-skills/ --------------------------------------------------------------------------
+# --- writing skills/ext/ --------------------------------------------------------------------------
 
 
 def digest(files: dict[str, bytes]) -> str:
@@ -198,7 +199,14 @@ def digest(files: dict[str, bytes]) -> str:
 
 
 def collect(found: list[Skill], out: Path, skills_dir: Path = SKILLS_DIR) -> dict[str, list[str]]:
-    """Replace `out` with the found skills. Returns the added/changed/removed/overrides skill names."""
+    """Replace `out` with the found skills, deleting `skills_dir/<name>/` where an extension ships the
+    same name (the CLI installs whichever duplicate it reads first, so only one copy may exist).
+
+    Returns skill names: added / changed / removed (from `out`), deleted (our copies deleted now) and
+    overrides (every collected skill that replaced one of ours, now or earlier).
+    """
+    if out.resolve() == skills_dir.resolve():
+        raise SystemExit("--out must not be the skills/ folder itself")
     by_name: dict[str, Skill] = {}
     errors = []
     for skill in found:
@@ -234,12 +242,15 @@ def collect(found: list[Skill], out: Path, skills_dir: Path = SKILLS_DIR) -> dic
             shutil.rmtree(out / name, ignore_errors=True)
             shutil.copytree(staged / name, out / name)
 
+    deleted = sorted(n for n in by_name if (skills_dir / n / "SKILL.md").exists())
+    for name in deleted:
+        shutil.rmtree(skills_dir / name)
     manifest = {
         name: {
             "package": skill.package,
             "source": skill.source,
             "hash": digest(skill.files),
-            "overrides": (skills_dir / name / "SKILL.md").exists(),
+            "overrides": name in deleted or old.get(name, {}).get("overrides", False),
         }
         for name, skill in sorted(by_name.items())
     }
@@ -248,14 +259,18 @@ def collect(found: list[Skill], out: Path, skills_dir: Path = SKILLS_DIR) -> dic
         "added": sorted(set(manifest) - set(old)),
         "changed": sorted(n for n in manifest if n in old and old[n]["hash"] != manifest[n]["hash"]),
         "removed": sorted(set(old) - set(manifest)),
+        "deleted": deleted,
         "overrides": sorted(n for n, entry in manifest.items() if entry["overrides"]),
+        "restore": sorted(n for n in set(old) - set(manifest) if old[n].get("overrides")),
     }
 
 
 def changes_markdown(changes: dict[str, list[str]], manifest: dict, statuses: list[tuple[str, str]]) -> str:
     lines = ["Skills collected from extensions' `pt_skills/` by `scripts/collect_ext_skills.py`.", ""]
     for key, title in [("added", "Added"), ("changed", "Changed"), ("removed", "Removed"),
-                       ("overrides", "Replacing a `skills/` skill of the same name")]:
+                       ("deleted", "Deleted from `skills/`: the extension's copy replaces ours"),
+                       ("restore", "No longer shipped, and it had replaced ours: restore `skills/<name>/` "
+                                   "from git history if we still want it")]:
         if changes[key]:
             lines.append(f"**{title}**")
             lines += [f"- `{n}`" + (f" from {manifest[n]['source']}" if n in manifest else "") for n in changes[key]]
@@ -272,7 +287,7 @@ def verify_install(installed: Path) -> list[str]:
     expected = {skill.parent.name: skill.parent for skill in find_skills()}
     present = {p.name for p in installed.iterdir() if (p / "SKILL.md").exists()} if installed.is_dir() else set()
     for name in sorted(present - set(expected)):
-        problems.append(f"{name}: installed but not in skills/ or ext-skills/")
+        problems.append(f"{name}: installed but not in skills/ or skills/ext/")
     for name, source in sorted(expected.items()):
         if name not in present:
             problems.append(f"{name}: not installed")
