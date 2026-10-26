@@ -4,7 +4,7 @@ description: This skills shows how to conduct experiments the MSMARCO passage co
 
 ---
 
-## 1. Evaluation
+## 1. Evaluation
 
 Use PyTerrier's `pt.Experiment` formulation for conducting experiments. Assuming your have two systems/pipelines, `systemA` (which may be your baseline) and `systemB`:
 
