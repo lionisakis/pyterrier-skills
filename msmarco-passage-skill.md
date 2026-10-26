@@ -1,6 +1,6 @@
 ---
 name: msmarco-passage-experiments
-description: This skills shows how to conduct experiments the MSMARCO passage corpus on PyTerrier. This also includes the TREC Deep Learning track topics sets 2019 and 2020 (often abbreviated as DL'19 and DL'20).
+description: This skills shows how to conduct experiments the MSMARCO passage corpus on PyTerrier. This also includes the TREC Deep Learning track topics sets 2019 and 2020 (often abbreviated as DL'19 and DL'20), and examples of getting a basic BM25 Terrier retriever.
 
 ---
 
