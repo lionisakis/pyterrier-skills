@@ -22,3 +22,4 @@ pyterrier_rag # RAG <https://github.com/terrierteam/pyterrier_rag>
 pyterrier_splade # SPLADE <https://github.com/cmacdonald/pyt_splade>
 suiteeval # SuiteEval <https://github.com/Parry-Parry/suiteeval>
 pyterrier_t5 # T5 <https://github.com/terrierteam/pyterrier_t5>
+fake_ext_test # Notification test <https://github.com/example/fake>
