@@ -4,7 +4,7 @@ Agent skills for developing with [PyTerrier](https://github.com/terrier-org/pyte
 in the open [Agent Skills](https://agentskills.io/specification) format. They work with Claude Code,
 Cursor, Codex, Gemini CLI and other agents supported by the [`skills` CLI](https://github.com/vercel-labs/skills).
 
-> Status: all twelve skills written and tested (CPU only). This repository is private and not published.
+> Status: all thirteen skills written and tested (CPU only). This repository is private and not published.
 
 ## Skills
 
@@ -34,8 +34,8 @@ reranker or expansion. `pyterrier-basics` is the base skill: install it with any
 From the project where you want the skills:
 
 ```bash
-npx skills add cmacdonald/pyterrier-skills --list                 # preview
-npx skills add cmacdonald/pyterrier-skills --agent claude-code    # install for Claude Code
+npx skills add lionisakis/pyterrier-skills --list                 # preview
+npx skills add lionisakis/pyterrier-skills --agent claude-code    # install for Claude Code
 npx skills check && npx skills update -y                          # later: pull changed skills
 ```
 
@@ -76,4 +76,5 @@ uv run pytest -m run  # execute `python run` blocks (needs Java 11+ for Terrier)
 uv run pytest -m slow # also execute `python run slow` blocks
 ```
 
-See [CLAUDE.md](CLAUDE.md) for how to write a skill.
+See [CLAUDE.md](CLAUDE.md) for how to write a skill, and [evals/README.md](evals/README.md) for the agent
+evals that test whether the skills help on real tasks.
