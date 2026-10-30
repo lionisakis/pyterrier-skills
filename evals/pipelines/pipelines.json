@@ -1,0 +1,224 @@
+{
+  "family": "pipeline-matrix",
+  "prompt": "Build code that evaluates, with PyTerrier, the following pipelines: BM25; BM25 >> PRF >> BM25; and BM25 scores injected into a BERT cross-encoder on MS MARCO dev, TREC DL19, TREC DL20 and NanoBEIR; and SPLADE; RetroMAE; SPLADE >> monoT5; RetroMAE >> monoT5; BM25 >> PRF >> SPLADE >> monoT5; BM25 >> ColBERT >> PRF >> ColBERT on NanoBEIR only. Reuse indexes and caches where you can, and test each pipeline for significance against BM25 with a Bonferroni correction.",
+  "run_dir_rule": "runs/<slug>/<pipeline>.res.gz, slug = ir_datasets id with '/' replaced by '-', lower case (the same layout SuiteEval's save_dir writes)",
+  "pipelines": [
+    {
+      "id": "bm25",
+      "spec": "BM25 (Terrier, default k1/b), k=1000",
+      "models": [],
+      "weight": 1
+    },
+    {
+      "id": "bm25_prf_bm25",
+      "spec": "BM25 >> RM3 (fb_docs=3, fb_terms=10) >> BM25, k=1000",
+      "models": [],
+      "weight": 1
+    },
+    {
+      "id": "splade",
+      "spec": "SPLADE learned-sparse retrieval, k=1000",
+      "models": [
+        "naver/splade-cocondenser-ensembledistil"
+      ],
+      "weight": 8,
+      "datasets": [
+        "nanobeir"
+      ]
+    },
+    {
+      "id": "retromae",
+      "spec": "RetroMAE dense retrieval (pyterrier_dr), k=1000",
+      "models": [
+        "Shitao/RetroMAE_MSMARCO_distill"
+      ],
+      "weight": 6,
+      "datasets": [
+        "nanobeir"
+      ]
+    },
+    {
+      "id": "splade_monot5",
+      "spec": "SPLADE top-100 >> text >> monoT5",
+      "models": [
+        "naver/splade-cocondenser-ensembledistil",
+        "castorini/monot5-base-msmarco"
+      ],
+      "weight": 3,
+      "datasets": [
+        "nanobeir"
+      ]
+    },
+    {
+      "id": "retromae_monot5",
+      "spec": "RetroMAE top-100 >> text >> monoT5",
+      "models": [
+        "Shitao/RetroMAE_MSMARCO_distill",
+        "castorini/monot5-base-msmarco"
+      ],
+      "weight": 3,
+      "datasets": [
+        "nanobeir"
+      ]
+    },
+    {
+      "id": "bm25_prf_splade_monot5",
+      "spec": "BM25 >> RM3 >> BM25 (k=1000) >> text >> SPLADE as re-scorer >> top-100 >> monoT5",
+      "models": [
+        "naver/splade-cocondenser-ensembledistil",
+        "castorini/monot5-base-msmarco"
+      ],
+      "weight": 4,
+      "datasets": [
+        "nanobeir"
+      ]
+    },
+    {
+      "id": "bm25_colbert_prf_colbert",
+      "spec": "BM25 (k=1000) >> ColBERT re-rank >> ColBERT-PRF (pyterrier_colbert ColbertPRF, rerank mode) >> ColBERT re-score",
+      "models": [
+        "ColBERT v2 MS MARCO checkpoint (record which one in manifest.json)"
+      ],
+      "weight": 10,
+      "datasets": [
+        "nanobeir"
+      ]
+    },
+    {
+      "id": "bm25_bert_ce",
+      "spec": "BM25 top-100 >> text >> cross-encoder where the query side is '<query> [SEP] <round(bm25 score)>' and the passage is unchanged; zero-shot, no fine-tuning",
+      "models": [
+        "cross-encoder/ms-marco-MiniLM-L-6-v2"
+      ],
+      "weight": 2
+    }
+  ],
+  "controls": [
+    {
+      "id": "bm25_ce",
+      "spec": "Harness-side: the condition's bm25 run top-100 >> plain cross-encoder (no score injection); not counted in agent metrics",
+      "models": [
+        "cross-encoder/ms-marco-MiniLM-L-6-v2"
+      ]
+    }
+  ],
+  "datasets": [
+    {
+      "id": "msmarco-dev",
+      "irds": "msmarco-passage/dev/small",
+      "corpus": "msmarco-passage",
+      "main": "RR@10",
+      "metrics": [
+        "RR@10",
+        "nDCG@10",
+        "R@1000"
+      ],
+      "weight": 3,
+      "queries": 6980
+    },
+    {
+      "id": "dl19",
+      "irds": "msmarco-passage/trec-dl-2019/judged",
+      "corpus": "msmarco-passage",
+      "main": "nDCG@10",
+      "metrics": [
+        "nDCG@10",
+        "AP(rel=2)",
+        "R(rel=2)@1000"
+      ],
+      "weight": 1,
+      "queries": 43
+    },
+    {
+      "id": "dl20",
+      "irds": "msmarco-passage/trec-dl-2020/judged",
+      "corpus": "msmarco-passage",
+      "main": "nDCG@10",
+      "metrics": [
+        "nDCG@10",
+        "AP(rel=2)",
+        "R(rel=2)@1000"
+      ],
+      "weight": 1,
+      "queries": 54
+    },
+    {
+      "id": "nanobeir",
+      "main": "nDCG@10",
+      "metrics": [
+        "nDCG@10",
+        "AP",
+        "R@100"
+      ],
+      "weight": 1,
+      "subsets": [
+        "nano-beir/arguana",
+        "nano-beir/climate-fever",
+        "nano-beir/dbpedia-entity",
+        "nano-beir/fever",
+        "nano-beir/fiqa",
+        "nano-beir/hotpotqa",
+        "nano-beir/msmarco",
+        "nano-beir/nfcorpus",
+        "nano-beir/nq",
+        "nano-beir/quora",
+        "nano-beir/scidocs",
+        "nano-beir/scifact",
+        "nano-beir/webis-touche2020"
+      ]
+    }
+  ],
+  "conditions": [
+    {
+      "id": "none",
+      "skills": false,
+      "docs": false,
+      "code": false
+    },
+    {
+      "id": "code",
+      "skills": false,
+      "docs": false,
+      "code": true
+    },
+    {
+      "id": "docs",
+      "skills": false,
+      "docs": true,
+      "code": false
+    },
+    {
+      "id": "skills",
+      "skills": true,
+      "docs": false,
+      "code": false
+    },
+    {
+      "id": "docs_code",
+      "skills": false,
+      "docs": true,
+      "code": true
+    },
+    {
+      "id": "skills_code",
+      "skills": true,
+      "docs": false,
+      "code": true
+    },
+    {
+      "id": "skills_docs",
+      "skills": true,
+      "docs": true,
+      "code": false
+    },
+    {
+      "id": "all",
+      "skills": true,
+      "docs": true,
+      "code": true
+    }
+  ],
+  "reference_condition": "all",
+  "bm25_parity_tolerance": 0.005,
+  "cell_off_threshold": 0.02
+}

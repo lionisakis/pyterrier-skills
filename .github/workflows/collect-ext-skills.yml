@@ -1,0 +1,38 @@
+# Weekly: copy every extension's pt_skills/ (listed in PyTerrier's docs/extensions.txt) into skills/ext/,
+# regenerate pt_docs/skills.rst, run the fast tests, and open or update one PR if anything changed.
+name: Collect extension skills
+on:
+  schedule:
+    - cron: "17 6 * * 1"  # Mondays 06:17 UTC; schedules only run from the default branch
+  workflow_dispatch:
+  push:
+    branches: [main, pt-skills]  # pt-skills: try it before this reaches main
+    paths: [scripts/collect_ext_skills.py, scripts/build_pt_docs.py, tests/**, .github/workflows/collect-ext-skills.yml]
+permissions:
+  contents: write
+  pull-requests: write
+concurrency: collect-ext-skills
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install pytest pyyaml  # all the fast tests need; `-m run` stays on the cluster
+      - run: python scripts/collect_ext_skills.py --from github --changes "$RUNNER_TEMP/changes.md"
+        env:
+          GH_TOKEN: ${{ github.token }}  # extension repos are public; the token lifts the API rate limit
+      - run: python scripts/build_pt_docs.py
+      - run: pytest
+      - uses: peter-evans/create-pull-request@v7
+        with:
+          branch: bot/ext-skills
+          title: Update extension skills
+          commit-message: Update extension skills from pt_skills
+          body-path: ${{ runner.temp }}/changes.md
+          add-paths: |
+            skills/**
+            pt_docs/skills.rst
+          delete-branch: true

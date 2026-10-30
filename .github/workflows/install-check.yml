@@ -1,0 +1,38 @@
+# After skills change: install this repo with the skills CLI into a scratch project and check it holds
+# exactly find_skills() — every skill, including the collected skills/ext/ ones.
+name: Install check
+on:
+  push:
+    branches: [main, pt-skills]
+    paths: [skills/**, .github/workflows/install-check.yml]
+  workflow_dispatch:
+env:
+  DISABLE_TELEMETRY: "1"  # CI installs are not real installs
+  SKILLS_CLI: skills@1.7.4  # pinned; bump by hand
+jobs:
+  install:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"  # skills@1.7.4 needs node >= 22.20
+      - run: pip install pyyaml
+      - run: npx -y "$SKILLS_CLI" add . --list
+      - name: Install into a scratch project and verify
+        run: |
+          mkdir "$RUNNER_TEMP/project" && cd "$RUNNER_TEMP/project" && git init -q
+          npx -y "$SKILLS_CLI" add "$GITHUB_WORKSPACE" --agent claude-code --skill '*' --copy -y
+          python "$GITHUB_WORKSPACE/scripts/collect_ext_skills.py" --verify-install-dir .claude/skills
+      - name: Install from GitHub (as users do) and check for updates
+        env:
+          GH_TOKEN: ${{ github.token }}  # the repo is private
+        run: |
+          mkdir "$RUNNER_TEMP/remote" && cd "$RUNNER_TEMP/remote" && git init -q
+          npx -y "$SKILLS_CLI" add "https://github.com/${{ github.repository }}/tree/${{ github.ref_name }}" \
+            --agent claude-code --skill '*' -y
+          python "$GITHUB_WORKSPACE/scripts/collect_ext_skills.py" --verify-install-dir .claude/skills
+          npx -y "$SKILLS_CLI" check

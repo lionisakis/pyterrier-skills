@@ -1,0 +1,347 @@
+---
+name: pyterrier-basics
+description: >-
+  Core PyTerrier knowledge that every other pyterrier-* skill builds on: how
+  PyTerrier works (transformers over query and result DataFrames), installing
+  pyterrier and Java, the data model (qid, query, docno, score, rank), pipeline
+  operators (>>, %, +, **, |, &), pt.apply, writing a custom pt.Transformer,
+  replacing legacy APIs (pt.init, BatchRetrieve) with their 1.x forms, and the
+  checklist for building a retrieval pipeline with a reranker. Use whenever writing,
+  fixing or reviewing any PyTerrier code, even when another pyterrier skill also applies.
+compatibility: pyterrier>=1.1 (checked with 1.1.2, Java 11)
+---
+
+# PyTerrier basics
+
+Docs: [Installation](https://pyterrier.readthedocs.io/en/latest/installation.html) ·
+[Data model](https://pyterrier.readthedocs.io/en/latest/datamodel.html) ·
+[Transformers](https://pyterrier.readthedocs.io/en/latest/transformer.html) ·
+[Operators](https://pyterrier.readthedocs.io/en/latest/operators.html) ·
+[pt.apply](https://pyterrier.readthedocs.io/en/latest/apply.html) ·
+[Input validation](https://pyterrier.readthedocs.io/en/latest/extending/validate.html) ·
+[Inspection troubleshooting](https://pyterrier.readthedocs.io/en/latest/troubleshooting/inspection.html) ·
+[Java troubleshooting](https://pyterrier.readthedocs.io/en/latest/troubleshooting/java.html)
+
+This is the base skill. The other pyterrier skills assume you know what is here.
+
+## How PyTerrier works
+
+- Everything is a `pt.Transformer`: it takes a DataFrame and returns a DataFrame.
+- Retrievers turn queries into ranked results. Rerankers rescore results. Query rewriters change
+  the `query` column. Indexers consume documents.
+- Transformers are combined with operators into pipelines. A pipeline is itself a transformer, so
+  it can be called with `.search("text")`, `.transform(df)`, or passed to `pt.Experiment`.
+  `.search()` runs **one** query and gives it `qid="1"`; for several queries pass a topics frame to
+  `.transform(topics)`.
+- Most work is choosing transformers for each stage. Each stage has its own skill:
+
+| Stage | Skill |
+|---|---|
+| Datasets, evaluation, significance, tuning | `pyterrier-experiments` |
+| Prebuilt indexes and caches on Hugging Face | `pyterrier-huggingface` |
+| Lexical first stage (Terrier, PISA), choosing a first-stage family | `pyterrier-retrieval` |
+| Fusing rankings (RRF, score interpolation) | `pyterrier-fusion` |
+| SPLADE: retrieval, reranking | `pyterrier-splade` |
+| Dense bi-encoders (pyterrier-dr): retrieval, reranking, PRF | `pyterrier-dense` |
+| Late interaction (ColBERT v2 / PLAID, PyLate): retrieval, reranking, PRF | `pyterrier-colbert` |
+| Query rewriting, PRF, document expansion | `pyterrier-expansion` |
+| Reranking (cross-encoders, T5, learning to rank) | `pyterrier-reranking` |
+| LLM listwise rerankers (RankZephyr, RankGPT, custom prompts) | `pyterrier-generative` |
+| Retrieval-augmented generation | `pyterrier-rag` |
+| Caching expensive stages | `pyterrier-caching` |
+
+## Install
+
+```bash
+pip install 'pyterrier[all]'
+```
+
+- Install the package `pyterrier`. `python-terrier` is the old name: versions before 1.0 conflict with
+  `pyterrier`, and 1.0 is an empty package that only depends on `pyterrier[all]`.
+- Needs Python 3.9 or newer. Terrier indexes and retrievers also need Java 11 or newer.
+  Other backends, such as PISA or dense indexes, don't need Java.
+- Java starts by itself the first time something needs it. Don't call `pt.init()`.
+- The first Java start downloads the Terrier jars (about 100 MB) into `pt.io.pyterrier_home()`:
+  `$PYTERRIER_HOME`, else `~/.pyterrier`. Set `PYTERRIER_HOME` to a writable local disk on shared or
+  read-only home directories; later starts reuse the jars.
+- Any Java setting must be made **before** Java starts, so put it straight after the import:
+
+```python
+import pyterrier as pt
+pt.java.set_memory_limit(8192)         # JVM heap in MB (8 GB)
+# pt.java.set_java_home("/usr/lib/jvm/java-17-openjdk")
+# pt.terrier.set_version("5.11")
+```
+
+## Quick start
+
+```python run
+import pyterrier as pt
+
+index = pt.terrier.TerrierIndex.example()   # prebuilt vaswani index (11,429 docs), downloaded once
+bm25 = index.bm25()
+results = bm25.search("chemical reactions")
+assert {"qid", "query", "docno", "score", "rank"} <= set(results.columns)
+print(results.head())
+```
+
+## Data model
+
+| Frame | Columns | Produced by |
+|---|---|---|
+| Q (queries, also called topics) | `qid`, `query` | `pt.new.queries([...])`, `dataset.get_topics()` |
+| D (documents) | `docno`, plus text fields such as `text` | `dataset.get_corpus_iter()` (yields dicts; it is an iterable with a length, not an iterator, so use `for` or `iter()`, not `next()`) |
+| R (results) | `qid`, `query`, `docno`, `score`, `rank` | retrievers and rerankers |
+| qrels (judgements) | `qid`, `docno`, `label` | `dataset.get_qrels()` |
+
+- `qid` and `docno` are **strings**. Convert ids you build yourself with `str(...)`.
+- `rank` starts at 0, and the highest score in each query has rank 0. Rerankers set `score` and `rank`
+  without reordering the rows, so sort by `["qid", "rank"]` before reading or cutting a top-k.
+- Terrier results also carry an integer `docid`, which is Terrier's internal id. Join and
+  evaluate on `docno`.
+- Results carry document text only when something adds it. Check with
+  `"text" in results.columns`.
+- `query` is the raw topic text: vaswani topics are upper case and end with a newline, while document
+  text is lower case. Normalise case and whitespace before matching query strings against text.
+- A query rewriter keeps the previous query in `query_0`. `pt.rewrite.reset()` restores it.
+- Extra columns pass through. Use `pt.inspect.transformer_outputs(t, ["qid", "query"])` to see what a
+  transformer will output.
+
+## Operators
+
+| Operator | Meaning | Example |
+|---|---|---|
+| `a >> b` | then: feed a's output into b | `bm25 >> reranker` |
+| `a % k` | keep the top k per query | `bm25 % 100` |
+| `a + b` | add scores (linear combination) | `bm25 + 0.5 * dph` |
+| `w * a` | multiply scores by a constant | `0.5 * dph` |
+| `a ** b` | feature union, building a `features` column for learning to rank | `bm25 >> (tf ** pl2)` |
+| `a \| b` | set union of documents (scores are dropped) | `bm25 \| dph` |
+| `a & b` | set intersection of documents (scores are dropped) | `bm25 & dph` |
+| `a ^ b` | concatenate b's results after a's | `bm25 % 10 ^ dph` |
+
+Precedence is Python's: `**` > `*` `%` > `+` > `>>` > `&` > `^` > `|`. Don't rely on it.
+Parenthesise every mixed expression, and always parenthesise `&`, `|`, `^` and `**`.
+
+```python
+# Incorrect: >> binds tighter than |, so this is (bm25 >> tf) | pl2
+pipe = bm25 >> tf | pl2
+# Correct: say what you mean
+pipe = bm25 >> (tf | pl2)
+```
+
+For more worked precedence cases, read [references/operators.md](references/operators.md) whenever you
+mix `>>` with other operators.
+
+## pt.apply: small transformers from functions
+
+| Need | Use |
+|---|---|
+| Rewrite each query | `pt.apply.query(lambda row: row["query"] + " extra")` |
+| Rescore each document | `pt.apply.doc_score(fn)`, with fn(row) returning the **new** score: it replaces `score`, so a bonus is `row["score"] + 1.0`, not `1.0` |
+| Rescore in batches (neural models) | `pt.apply.doc_score(fn, batch_size=64)`, with fn(df) returning one score per row |
+| Add a learning-to-rank feature | `pt.apply.doc_features(fn)`, with fn(row) returning a numpy array |
+| Add or replace one column | `pt.apply.<column>(fn)`, e.g. `pt.apply.title_len(lambda row: len(row["title"]))` |
+| Drop a column | `pt.apply.<column>(drop=True)` |
+| Rename columns | `pt.apply.rename({"old": "new"})` |
+| Anything else, per query | `pt.apply.by_query(fn)`, with fn(df_for_one_query) returning a df |
+| Anything else, whole frame | `pt.apply.generic(fn)`, with fn(df) returning a df |
+
+- Every `pt.apply` function takes `label="..."`, which names it in schematics and errors.
+- `doc_score` recomputes `rank` for you.
+- Use the batch form for anything model-based. Without `batch_size` the function is called once per row.
+
+```python run
+# Rerank the BM25 top 50 by document length (only to show the shape of a pipeline)
+def length_score(df):
+    return df["text"].str.len()
+
+pipeline = (
+    bm25 % 50
+    >> index.text_loader()          # adds the `text` column that the scorer needs
+    >> pt.apply.doc_score(length_score, batch_size=16, label="length")
+)
+reranked = pipeline.search("chemical reactions")
+assert len(reranked) == 50 and reranked["rank"].min() == 0
+```
+
+## Writing a custom transformer
+
+Use a `pt.Transformer` subclass when the component has state (a model or an index) or needs
+configuration. Use `pt.apply` for one-liners. A transformer has two contracts that PyTerrier
+reads off the class: its **input** (declared by validating it) and its **output** (declared by
+what it returns for an empty input). The template below is a reranker:
+
+```python run
+class LengthReranker(pt.Transformer):
+    """Scores each retrieved document by its text length."""
+
+    def transform(self, inp):
+        # Input contract: result_frame checks only qid and docno; list every other column transform reads.
+        pt.validate.result_frame(inp, extra_columns=["query", "text"], context=self)
+        # Output contract: an empty input falls through and returns an empty frame with the output columns.
+        out = pt.new.DataFrameBuilder(["qid", "query", "docno", "score"])
+        for qid, group in inp.groupby("qid"):
+            out.extend({
+                "qid": qid,                          # a scalar repeats for every row
+                "query": group["query"].iloc[0],
+                "docno": group["docno"].tolist(),    # docnos, not scores
+                "score": group["text"].str.len().tolist(),
+            })
+        return pt.model.add_ranks(out.to_df())
+
+top = (bm25 % 10 >> index.text_loader() >> LengthReranker()).search("chemical reactions")
+assert top.iloc[0]["rank"] == 0
+```
+
+- Build outputs with `pt.new.DataFrameBuilder` (in core since 1.1), and rank them with `pt.model.add_ranks`.
+- Score documents in batches inside `transform`. Don't call a model once per row.
+- This template keeps only the four columns it builds. To pass every input column through (what the
+  pyterrier-dr scorers do), use `pt.model.add_ranks(inp.assign(score=scores))` instead of the builder.
+
+### Declare the input and the output
+
+PyTerrier does not trust a transformer's docstring. It learns the contract by running the class:
+
+| Contract | You write | PyTerrier reads it with |
+|---|---|---|
+| Input | a `pt.validate.*` call as the first line of `transform`: `result_frame(inp, extra_columns=[...], context=self)` for results, `query_frame(...)` for queries, `document_frame(...)` for documents, `columns(inp, includes=[...], excludes=[...])` for anything else | `pt.inspect.transformer_inputs(t)`: calls `t` with an empty frame and reads the missing columns from the `InputValidationError` |
+| Output | a `transform` that, given an empty frame with valid columns, returns an empty frame with exactly the output columns. Never call the model on it | `pt.inspect.transformer_outputs(t, input_columns)`: calls `t.transform` with an empty frame of those columns |
+| Several accepted inputs | `with pt.validate.any(inp, context=self) as v:` with one `v.query_frame(..., mode="...")` or `v.result_frame(..., mode="...")` per mode, then branch on `v.mode`. pyterrier-dr's `BiEncoder` and `FlexIndex` work this way | the same two calls; `transformer_inputs` returns one list per mode |
+| `transform_iter` instead of `transform` | `inp = pt.utils.peekable(inp)` then `pt.validate.result_iter(inp, ...)`, **plus** a `transform_outputs(self, input_columns)` method that validates `input_columns` and returns the output list | `transform_outputs` is called instead of running the transformer |
+
+`pt.Experiment` runs this check on every pipeline against the topics' columns **before** executing
+anything (`validate="warn"` by default; pass `validate="error"` to stop). Pipeline schematics use
+the same information. `pt.apply` functions declare no input columns, so the check passes them even
+when a column they read is missing: the run fails later with a `KeyError`, even with
+`validate="error"`. Put the loader in front yourself, or write a class with a `pt.validate` call. Check a transformer the moment you write it:
+
+```python run
+reranker = LengthReranker()
+assert pt.inspect.transformer_inputs(reranker) == [["qid", "docno", "query", "text"]]
+assert pt.inspect.transformer_outputs(reranker, ["qid", "query", "docno", "score", "rank", "text"]) \
+    == ["qid", "query", "docno", "score", "rank"]
+
+pipeline = bm25 % 10 >> index.text_loader() >> reranker
+assert "score" in pt.inspect.transformer_outputs(pipeline, ["qid", "query"])   # whole pipeline, no data needed
+
+# text_loader forgotten: strict=False returns None instead of raising InputValidationError
+assert pt.inspect.transformer_outputs(bm25 % 10 >> reranker, ["qid", "query"], strict=False) is None
+```
+
+For model-backed transformers, query rewriters, multi-mode transformers, `transform_iter`, `pt.apply`
+with `transform_outputs=`, and fixing a transformer that `pt.Experiment` reports as "could not be
+validated", read [references/custom-transformers.md](references/custom-transformers.md).
+
+## Legacy → 1.x
+
+Code from tutorials, papers and extension READMEs often predates 1.0. Translate it before you use it.
+
+| Legacy | 1.x |
+|---|---|
+| `pt.init()`, `if not pt.started(): pt.init()` | delete it; Java starts by itself. For settings, use `pt.java.*` / `pt.terrier.*` (see Install) |
+| `pt.init(mem=8000)` | `pt.java.set_memory_limit(8000)` (MB, as before) |
+| `pt.BatchRetrieve(index, wmodel="BM25")`, `pt.TerrierRetrieve` | `pt.terrier.Retriever(index, wmodel="BM25")`, or `pt.terrier.TerrierIndex(path).bm25()` |
+| `pt.FeaturesBatchRetrieve` | `pt.terrier.FeaturesRetriever` |
+| `pt.BatchRetrieve.from_dataset(...)` | `pt.terrier.Retriever.from_dataset(...)` |
+| `pyterrier.transformer.TransformerBase` | `pt.Transformer` |
+| `pta.DataFrameBuilder`, `pta.validate` | `pt.new.DataFrameBuilder`, `pt.validate` |
+| `pta.Artifact.from_hf(...)` | `pt.Artifact.from_hf(...)` (see the `pyterrier-huggingface` skill) |
+| `~transformer` (caching operator) | pyterrier-caching (see the `pyterrier-caching` skill) |
+| `pt.DFIndexer` | `pt.IterDictIndexer` or `pt.terrier.TerrierIndex(path).index(...)` |
+| `import pyt_splade` | `import pyterrier_splade` |
+| `index.getCollectionStatistics()` (Java index object) | `pt.terrier.TerrierIndex(path).collection_statistics()` |
+| `pt.started()`, `pt.version()`, `pt.set_property()` | `pt.java.started()`, `pt.terrier.version()`, `pt.terrier.set_property()` |
+
+## Workflow: creating an experimental pipeline
+
+Copy this checklist and tick each item. Don't skip a gate.
+
+```
+- [ ] 1. Dataset and measures fixed from the task (pyterrier-experiments). Topics have a `query` column.
+- [ ] 2. First-stage index: prebuilt artifact if one exists (pyterrier-huggingface), else build one (pyterrier-retrieval; pyterrier-splade, pyterrier-dense or pyterrier-colbert for learned models).
+- [ ] 3. First-stage baseline evaluated.
+         GATE: the score is in the expected range for this dataset. If not, stop and fix the index or parameters.
+- [ ] 4. Optional expansion (pyterrier-expansion) or fusion (pyterrier-fusion) stage, evaluated against step 3.
+- [ ] 5. Rerank depth k chosen and stated (`first_stage % k`). A `text` column is present before the reranker.
+- [ ] 6. Reranker added (pyterrier-reranking). It runs on 2-3 queries with `.search()` before the full run.
+- [ ] 7. All systems compared in one pt.Experiment, with the first stage as baseline and a multiple-testing correction.
+- [ ] 8. Report: dataset id, measures, k, model names and versions, parameters, and the results table.
+```
+
+The pipeline shape this produces:
+
+```python
+pipeline = first_stage % k >> text_loader >> reranker
+```
+
+- Example code shows a technique, not a setup. Take the collection, topics, depth and measures from
+  the user's task.
+- Small collections (vaswani, `TerrierIndex.example()`) are fine for checking that code runs and for the
+  numbers a task asks for on them. Never compare their numbers with published results.
+- A reranker's input is cut at `k`, so AP and R@1000 fall against a 1000-deep baseline from the cut alone.
+  Add `first_stage % k` as a system, or use measures cut at or below `k`, before crediting the reranker.
+
+### Comparing with published numbers
+
+- Don't compare numbers from a toy collection with numbers from a paper.
+- Default parameters differ between systems. For example, BM25 k1 and b differ between Terrier,
+  Anserini and PISA. Pass parameters explicitly and check which values were actually used, from the
+  installed package source, the index metadata or the paper. The `pyterrier-retrieval` skill lists
+  indicative values.
+- Report your numbers and the published numbers in separate columns, with the difference.
+- Never change the evaluation to move a result. Record every assumption and every place where your
+  setup differs from the publication.
+
+## Don't
+
+- Don't call `pt.init()` or check `pt.started()` before using PyTerrier.
+- Don't use `pt.BatchRetrieve`, `pt.TerrierRetrieve` or `TransformerBase`. Use the 1.x names in the table above.
+- Don't use the `~` caching operator. It was removed in 1.0.
+- Don't create `pt.terrier.Retriever(index)` without `wmodel=`. The default is DPH, not BM25.
+- Don't mix operators without parentheses.
+- Don't loop `.search("…")` over several queries. Every call gets `qid="1"`, so the results collide. Pass a
+  topics frame to `.transform(topics)`.
+- Don't give a reranker results that have no `text` column. Add `index.text_loader()` or `dataset.text_loader()` first.
+- Don't use numeric `qid` or `docno` values. They must be strings.
+- Don't score one row at a time with a neural model. Use `batch_size=` or batch inside `transform`.
+- Don't write `transform` without a `pt.validate.*` call as its first line. Without it PyTerrier can't tell what
+  the transformer needs, and a wrong input surfaces as a `KeyError` inside your code instead of an
+  `InputValidationError` at the pipeline boundary.
+- Don't run the model on an empty input, and don't return a frame with different columns for it.
+  `pt.inspect` and `pt.Experiment` pass an empty frame to learn the output columns.
+- Don't implement `transform_iter` without `transform_outputs`. Such a transformer can't be inspected.
+- Don't silence `pt.Experiment`'s validation report with `validate="ignore"`. Fix the transformer instead.
+- Don't copy snippets from the docs or READMEs unchecked. Some are broken or legacy. Run them first.
+- Don't call `.parallel()` without `pyterrier-alpha[parallel]` installed. It is experimental.
+
+## Reference files
+
+| Read | When |
+|---|---|
+| [references/operators.md](references/operators.md) | combining three or more transformers, or debugging an unexpected pipeline structure |
+| [references/custom-transformers.md](references/custom-transformers.md) | writing a transformer class: model-backed, query rewriting, iterator-based, or one that must work with `pt.inspect` |
+
+## Troubleshooting
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| `RuntimeError: Both 'pyterrier' and 'python-terrier' packages are installed with mismatched versions` | a `python-terrier` older than 1.0 is installed next to `pyterrier` | `pip uninstall python-terrier`, or `pip install 'python-terrier>=1.0'` |
+| Java not found, or a JVM version error on first retrieval | no Java 11+, or `JAVA_HOME` points to an old JVM | install Java 11+, or `pt.java.set_java_home(path)` straight after the import |
+| `RuntimeError: You can only call <function set_memory_limit …> before either you start using java` | a Java setting was made after the first Terrier call | move `pt.java.*` / `pt.terrier.set_*` calls to straight after `import pyterrier` |
+| `RuntimeError: You can only call <function legacy_init …>` | legacy `pt.init()` called after Java started | delete `pt.init()` (see Legacy → 1.x) |
+| `DeprecationWarning: Call to deprecated class BatchRetrieve` | legacy code | see the Legacy → 1.x table |
+| `KeyError: 'text'`, or `InputValidationError … missing_columns=['text']` | the reranker received results without document text. A `pt.apply` function fails with the `KeyError` mid-run: validation can't see the columns it reads | insert `index.text_loader()` or `dataset.text_loader()` before it |
+| `UserWarning: CUDA initialization: The NVIDIA driver on your system is too old` on import or model load | the installed torch wheel was built for a newer CUDA than the machine's driver; torch falls back to CPU | harmless on CPU (`device="cpu"`). To silence it, hide the GPUs with `CUDA_VISIBLE_DEVICES=""` or install the CPU wheel (`--index-url https://download.pytorch.org/whl/cpu`). To use the GPUs, install a torch build for the driver's CUDA version (`nvidia-smi` shows it) |
+| `TypeError: 'GeneratorLen' object is not an iterator` | `next()` on `dataset.get_corpus_iter()` | `next(iter(dataset.get_corpus_iter()))`, or a `for` loop |
+| Several queries all come back with `qid` `1` | `.search(str)` called once per query | `pipeline.transform(topics)` |
+| `index.text_loader()` adds no `text` column and raises no error | the Terrier index was built without `text` in its `meta` | `dataset.text_loader()`, or rebuild with `indexer(meta={"docno": ..., "text": ...})` |
+| `UserWarning: Experiment Pipeline Validation Report … failed validation` | a stage's input contract doesn't match the previous stage's output (usually a missing `text` or `query` column) | walk the pipeline with `pt.inspect.transformer_outputs(stage, cols)` to find the stage, then insert the missing loader or rewriter |
+| `… Validation Report … could not be validated` | a custom transformer isn't inspectable: no `pt.validate` call, it fails on an empty frame, or it has `transform_iter` without `transform_outputs` | apply the "Declare the input and the output" table. `validate="ignore"` only hides it |
+| `InspectError: This transformer is not inspectable` | `transform_iter` without `transform_outputs` | add `transform_outputs(self, input_columns)` (see the reference file) |
+| A custom transformer shows `?` in a pipeline schematic | same as above: inputs or outputs can't be determined | same fix |
+| Pipeline results look wrong after combining with `\|`, `&` or `+` | operator precedence | parenthesise. Print the pipeline (`print(pipe)`) to see its structure |
+| Results all come from one retriever after `\|` or `&` | set operators drop scores | rescore after the set operation, e.g. `(a \| b) >> scorer` |
+| Out of memory in Java on a large index | default JVM heap too small | `pt.java.set_memory_limit(16384)` (MB) before Java starts |
+| `Invalid maximum heap size: -Xmx8.0m`, then `SystemError: JVM failed to start` | `set_memory_limit` was given GB; it takes MB | `pt.java.set_memory_limit(8192)` for 8 GB |
+| `ImportError: pyterrier-alpha[parallel] must be installed` | `.parallel()` was called | `pip install 'pyterrier-alpha[parallel]'` |
