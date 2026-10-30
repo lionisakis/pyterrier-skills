@@ -1,24 +1,19 @@
 #!/usr/bin/env python3
-"""Collect the agent skills that PyTerrier extensions ship in a `pt_skills/` folder into `skills/ext/`.
+"""Update `skills/ext/` from the extensions listed in PyTerrier's `docs/extensions.txt`.
 
-Works like PyTerrier's `docs/extras/generate_extensions.py`, which copies each extension's `pt_docs/`
-folder into the readthedocs build. It reads the same `docs/extensions.txt` (`package # Name <url>` per
-line) and looks for `pt_skills/<name>/SKILL.md` in each extension:
-
-    --from github      (default) list each extension's GitHub repo (the `<url>`) and download every
-                       `**/pt_skills/<name>/` folder from its default branch. Needs no pip installs.
-    --from installed   look in the pip-installed package, as the docs build does:
-                       `importlib.resources.files(package) / "pt_skills"`.
+That list (`package # Name <url>` per line) is the only source. For each GitHub repo in it, this downloads
+every `**/pt_skills/<name>/` folder from the default branch. Needs no pip installs.
 
 Each skill is copied to `skills/ext/<name>/` (under `skills/` because that is where the `skills` CLI
-looks), replacing what was there; skills no longer provided are removed. Where an extension ships a
-name we also have, our `skills/<name>/` is deleted, since the CLI installs whichever duplicate it reads
-first. `skills/ext/manifest.json` records where each skill came from.
-The run fails, writing nothing, if a SKILL.md has bad frontmatter or two extensions ship the same name.
+looks), replacing what was there; skills no longer provided are removed, including those of an extension
+dropped from the list. Where an extension ships a name we also have, our `skills/<name>/` is deleted, since
+the CLI installs whichever duplicate it reads first. `skills/ext/manifest.json` records where each skill
+came from and `skills/ext/extensions.txt` is the list as last seen, so a change to the list shows up too.
+The run fails, writing nothing, if the list has no extensions, a SKILL.md has bad frontmatter or two
+extensions ship the same name.
 
 Examples
     python scripts/collect_ext_skills.py
-    python scripts/collect_ext_skills.py --from installed --extensions ../pyterrier/docs/extensions.txt
     python scripts/collect_ext_skills.py --changes /tmp/changes.md     # summary for the PR body
     python scripts/collect_ext_skills.py --verify-install-dir /tmp/p/.claude/skills
 """
@@ -27,8 +22,6 @@ from __future__ import annotations
 
 import argparse
 import hashlib
-import importlib.metadata
-import importlib.resources
 import json
 import os
 import re
@@ -63,7 +56,7 @@ class Extension:
 class Skill:
     name: str
     package: str
-    source: str  # "<package> <version>" or "<owner>/<repo>@<tree sha>"
+    source: str  # "<owner>/<repo>@<tree sha>"
     files: dict[str, bytes]  # path inside the skill folder -> content
 
 
@@ -85,10 +78,24 @@ def parse_extensions(text: str) -> list[Extension]:
     return extensions
 
 
-def read_extensions(source: str) -> list[Extension]:
-    if re.match(r"^https?://", source):
-        return parse_extensions(fetch(source).decode("utf-8"))
-    return parse_extensions(Path(source).read_text(encoding="utf-8"))
+def read_extensions(source: str) -> tuple[str, list[Extension]]:
+    text = fetch(source).decode("utf-8") if re.match(r"^https?://", source) else Path(source).read_text(encoding="utf-8")
+    extensions = parse_extensions(text)
+    if not any(GITHUB_URL.match(ext.url or "") for ext in extensions):  # a broken list must not read as "every skill was removed"
+        raise SystemExit(f"{source}: no extensions with a GitHub URL; not collecting")
+    return text, extensions
+
+
+def update_list_snapshot(text: str, out: Path) -> dict[str, list[str]]:
+    """Save the list to `out/extensions.txt` and return the extensions added to or removed from it."""
+    def labels(lines: str) -> set[str]:
+        return {ext.package or ext.name for ext in parse_extensions(lines)}
+
+    path = out / "extensions.txt"
+    old = labels(path.read_text(encoding="utf-8")) if path.exists() else set()
+    new = labels(text)
+    path.write_text(text, encoding="utf-8")
+    return {"listed": sorted(new - old), "unlisted": sorted(old - new)}
 
 
 def fetch(url: str, api: bool = False) -> bytes:
@@ -110,38 +117,7 @@ def safe_relpath(path: str) -> str:
     return path
 
 
-# --- --from installed -----------------------------------------------------------------------------
-
-
-def _walk(folder, prefix: str = ""):
-    for entry in sorted(folder.iterdir(), key=lambda e: e.name):
-        if entry.name in IGNORED_PARTS:
-            continue
-        if entry.is_dir():
-            yield from _walk(entry, f"{prefix}{entry.name}/")
-        else:
-            yield f"{prefix}{entry.name}", entry.read_bytes()
-
-
-def installed_skills(ext: Extension) -> tuple[list[Skill], str]:
-    if not ext.package:
-        return [], "link only"
-    try:
-        version = importlib.metadata.version(ext.package)
-        root = importlib.resources.files(ext.package.replace("-", "_")) / "pt_skills"
-    except (importlib.metadata.PackageNotFoundError, ModuleNotFoundError):
-        return [], "not installed"
-    if not root.is_dir():
-        return [], "no pt_skills"
-    skills = [
-        Skill(folder.name, ext.package, f"{ext.package} {version}", dict(_walk(folder)))
-        for folder in sorted(root.iterdir(), key=lambda e: e.name)
-        if folder.is_dir() and (folder / "SKILL.md").is_file()
-    ]
-    return skills, f"{len(skills)} skill(s)"
-
-
-# --- --from github --------------------------------------------------------------------------------
+# --- GitHub -----------------------------------------------------------------------------------------
 
 
 def skill_folders(tree: list[dict]) -> dict[str, str]:
@@ -266,8 +242,10 @@ def collect(found: list[Skill], out: Path, skills_dir: Path = SKILLS_DIR) -> dic
 
 
 def changes_markdown(changes: dict[str, list[str]], manifest: dict, statuses: list[tuple[str, str]]) -> str:
-    lines = ["Skills collected from extensions' `pt_skills/` by `scripts/collect_ext_skills.py`.", ""]
-    for key, title in [("added", "Added"), ("changed", "Changed"), ("removed", "Removed"),
+    lines = ["Skills collected from the extensions in PyTerrier's `docs/extensions.txt` by "
+             "`scripts/collect_ext_skills.py`.", ""]
+    for key, title in [("listed", "Added to extensions.txt"), ("unlisted", "Removed from extensions.txt"),
+                       ("added", "Added"), ("changed", "Changed"), ("removed", "Removed"),
                        ("deleted", "Deleted from `skills/`: the extension's copy replaces ours"),
                        ("restore", "No longer shipped, and it had replaced ours: restore `skills/<name>/` "
                                    "from git history if we still want it")]:
@@ -304,7 +282,6 @@ def verify_install(installed: Path) -> list[str]:
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--from", dest="source", choices=["github", "installed"], default="github")
     ap.add_argument("--extensions", default=EXTENSIONS_URL, help="path or URL of extensions.txt")
     ap.add_argument("--out", type=Path, default=EXT_SKILLS_DIR)
     ap.add_argument("--changes", type=Path, help="write a Markdown summary of the changes here")
@@ -319,15 +296,16 @@ def main() -> None:
         print(f"{len(find_skills())} skills expected, {len(problems)} problem(s)")
         sys.exit(1 if problems else 0)
 
-    find = github_skills if args.source == "github" else installed_skills
+    text, extensions = read_extensions(args.extensions)
     found, statuses = [], []
-    for ext in read_extensions(args.extensions):
-        skills, status = find(ext)
+    for ext in extensions:
+        skills, status = github_skills(ext)
         label = ext.package or ext.name
         print(f"{label:28} {status}")
         statuses.append((label, status))
         found += skills
     changes = collect(found, args.out)
+    changes.update(update_list_snapshot(text, args.out))
     manifest = json.loads((args.out / "manifest.json").read_text(encoding="utf-8"))
     print(f"\n{len(manifest)} skill(s) in {args.out}: " + ", ".join(f"{k} {len(v)}" for k, v in changes.items()))
     if args.changes:

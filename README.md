@@ -57,7 +57,8 @@ PyTerrier extensions can ship their own skills in a `pt_skills/` folder inside t
 `pt_docs/` folder the PyTerrier docs already collect. Every Monday the
 [collect-ext-skills](.github/workflows/collect-ext-skills.yml) Action reads PyTerrier's
 [`docs/extensions.txt`](https://github.com/terrier-org/pyterrier/blob/master/docs/extensions.txt), copies
-each `pt_skills/<name>/` into [`skills/ext/`](skills/ext/), and opens a PR. If an extension ships a skill
+each `pt_skills/<name>/` into [`skills/ext/`](skills/ext/), and opens a PR. Any change, to a skill or to
+the list itself, @mentions the repo owner on that PR, which sends a GitHub notification. If an extension ships a skill
 with the same name as ours, the PR deletes our copy, so the extension's version is the one installed. Once merged, `npx skills update` delivers it. How to write one:
 [`pt_docs/authoring.rst`](pt_docs/authoring.rst).
 

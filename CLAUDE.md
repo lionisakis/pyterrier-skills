@@ -28,6 +28,7 @@ evals/evals.json               # realistic task prompts; evals/run_evals.py runs
 evals/pipelines/               # pipeline-matrix evals (skills/docs/code-view ablation); evals/run_pipelines.py
 skills/ext/<skill-name>/       # GENERATED: skills copied from extensions' pt_skills/; never edit by hand
 skills/ext/manifest.json       # where each collected skill came from, and whether it replaced one of ours
+skills/ext/extensions.txt      # GENERATED: PyTerrier's docs/extensions.txt as last seen
 scripts/collect_ext_skills.py  # fills skills/ext/ from PyTerrier's docs/extensions.txt (weekly Action opens a PR)
 pt_docs/                       # this repo's page in the PyTerrier docs; skills.rst is generated
 scripts/build_pt_docs.py       # regenerates pt_docs/skills.rst from the frontmatter
@@ -42,8 +43,8 @@ Never put a `SKILL.md` anywhere except `skills/<name>/SKILL.md` (and the generat
 
 Extensions can ship skills in `<package>/pt_skills/<name>/SKILL.md`, the way they ship `pt_docs/`
 (guide for authors: `pt_docs/authoring.rst`). `python scripts/collect_ext_skills.py` reads PyTerrier's
-`docs/extensions.txt` and copies every such folder into `skills/ext/` (`--from github`, the default, reads
-each repo's default branch; `--from installed` reads pip-installed packages like the docs build does).
+`docs/extensions.txt` and copies every such folder into `skills/ext/` from each repo's default branch. That
+list is the only source; `skills/ext/extensions.txt` keeps the copy last seen, so a list change opens a PR too.
 They sit under `skills/` because the `skills` CLI only scans `skills/` (3 levels deep), the repo root
 and agent folders. When an extension ships a name we also have, the collector deletes our
 `skills/<name>/` in the same PR: the CLI installs whichever duplicate it reads first, so each name must

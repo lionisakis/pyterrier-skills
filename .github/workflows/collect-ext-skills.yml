@@ -1,12 +1,13 @@
 # Weekly: copy every extension's pt_skills/ (listed in PyTerrier's docs/extensions.txt) into skills/ext/,
-# regenerate pt_docs/skills.rst, run the fast tests, and open or update one PR if anything changed.
+# regenerate pt_docs/skills.rst, run the fast tests, open or update one PR if anything changed (a skill or
+# the list itself), and @mention the repo owner on the PR so that a change sends a notification.
 name: Collect extension skills
 on:
   schedule:
     - cron: "17 6 * * 1"  # Mondays 06:17 UTC; schedules only run from the default branch
   workflow_dispatch:
   push:
-    branches: [main, pt-skills]  # pt-skills: try it before this reaches main
+    branches: [main]
     paths: [scripts/collect_ext_skills.py, scripts/build_pt_docs.py, tests/**, .github/workflows/collect-ext-skills.yml]
 permissions:
   contents: write
@@ -21,12 +22,13 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install pytest pyyaml  # all the fast tests need; `-m run` stays on the cluster
-      - run: python scripts/collect_ext_skills.py --from github --changes "$RUNNER_TEMP/changes.md"
+      - run: python scripts/collect_ext_skills.py --changes "$RUNNER_TEMP/changes.md"
         env:
           GH_TOKEN: ${{ github.token }}  # extension repos are public; the token lifts the API rate limit
       - run: python scripts/build_pt_docs.py
       - run: pytest
-      - uses: peter-evans/create-pull-request@v7
+      - id: pr
+        uses: peter-evans/create-pull-request@v7
         with:
           branch: bot/ext-skills
           title: Update extension skills
@@ -36,3 +38,12 @@ jobs:
             skills/**
             pt_docs/skills.rst
           delete-branch: true
+      - name: Notify the owner
+        if: steps.pr.outputs.pull-request-operation == 'created' || steps.pr.outputs.pull-request-operation == 'updated'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          OWNER: ${{ github.repository_owner }}
+          PR: ${{ steps.pr.outputs.pull-request-number }}
+        run: |
+          { echo "@$OWNER the weekly check found a change:"; echo; cat "$RUNNER_TEMP/changes.md"; } > "$RUNNER_TEMP/notify.md"
+          gh pr comment "$PR" --body-file "$RUNNER_TEMP/notify.md"

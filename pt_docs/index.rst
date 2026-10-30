@@ -1,7 +1,7 @@
 Agent Skills for PyTerrier
 =================================================
 
-`pyterrier-skills <https://github.com/cmacdonald/pyterrier-skills>`__ are agent skills that teach coding
+`pyterrier-skills <https://github.com/lionisakis/pyterrier-skills>`__ are agent skills that teach coding
 agents (Claude Code, Codex, Cursor, Gemini CLI and others) to build PyTerrier 1.x pipelines and experiments:
 retrieval, fusion, query and document expansion, reranking, RAG, caching and evaluation. They follow the open
 `Agent Skills <https://agentskills.io/specification>`__ format: each skill is a ``SKILL.md`` with tested
@@ -13,7 +13,7 @@ You can install the skills into a project with the
 .. code-block:: console
    :caption: Install the PyTerrier skills for Claude Code
 
-   $ npx skills add cmacdonald/pyterrier-skills --agent claude-code
+   $ npx skills add lionisakis/pyterrier-skills --agent claude-code
 
 Extensions can ship their own skills in a ``pt_skills/`` folder, next to ``pt_docs/``. They are collected
 into this set each week, so one install covers PyTerrier and its extensions.

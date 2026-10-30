@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import importlib
 import importlib.util
 import json
 import shutil
@@ -23,30 +22,6 @@ def skill_md(name: str, body: str = "Body.\n") -> str:
     return f"---\nname: {name}\ndescription: Use when testing.\ncompatibility: pyterrier>=1.1\n---\n\n{body}"
 
 
-def make_package(root: Path, package: str, skills: dict[str, str]) -> None:
-    """A minimal installed package: <package>/pt_skills/<name>/SKILL.md plus a .dist-info."""
-    (root / package).mkdir(parents=True)
-    (root / package / "__init__.py").write_text("")
-    for name, text in skills.items():
-        (root / package / "pt_skills" / name / "references").mkdir(parents=True)
-        (root / package / "pt_skills" / name / "SKILL.md").write_text(text)
-        (root / package / "pt_skills" / name / "references" / "api.md").write_text("# API\n")
-    dist = root / f"{package}-0.1.dist-info"
-    dist.mkdir()
-    (dist / "METADATA").write_text(f"Metadata-Version: 2.1\nName: {package}\nVersion: 0.1\n")
-
-
-@pytest.fixture
-def site(tmp_path, monkeypatch):
-    site = tmp_path / "site"
-    site.mkdir()
-    monkeypatch.syspath_prepend(str(site))
-    yield site
-    for module in [m for m in sys.modules if m.startswith("fakeext")]:
-        del sys.modules[module]
-    importlib.invalidate_caches()
-
-
 @pytest.fixture
 def own(tmp_path):
     """A stand-in for skills/ with one hand-written skill, so no test touches the real skills/."""
@@ -56,12 +31,13 @@ def own(tmp_path):
     return own
 
 
-def run(own: Path, lines: str) -> dict:
-    importlib.invalidate_caches()
-    found = []
-    for ext in collector.parse_extensions(lines):
-        found += collector.installed_skills(ext)[0]
-    return collector.collect(found, own / "ext", own)
+def ext_skill(name: str, text: str | None = None) -> collector.Skill:
+    files = {"SKILL.md": (text or skill_md(name)).encode(), "references/api.md": b"# API\n"}
+    return collector.Skill(name, "fakeext", "owner/fakeext@abc", files)
+
+
+def run(own: Path, *skills: collector.Skill) -> dict:
+    return collector.collect(list(skills), own / "ext", own)
 
 
 def test_parse_extensions_matches_generate_extensions():
@@ -77,10 +53,9 @@ def test_parse_extensions_matches_generate_extensions():
     ]
 
 
-def test_installed_collects_overrides_and_skips(site, own):
-    make_package(site, "fakeext", {"fake-ext": skill_md("fake-ext"), "pyterrier-basics": skill_md("pyterrier-basics")})
+def test_collects_and_overrides(own):
     out = own / "ext"
-    changes = run(own, "fakeext # Fake <https://example.org>\nnot_installed_pkg # Missing\n")
+    changes = run(own, ext_skill("fake-ext"), ext_skill("pyterrier-basics"))
 
     assert (out / "fake-ext" / "SKILL.md").read_text() == skill_md("fake-ext")
     assert (out / "fake-ext" / "references" / "api.md").exists()
@@ -88,38 +63,31 @@ def test_installed_collects_overrides_and_skips(site, own):
     assert not (own / "pyterrier-basics").exists(), "our copy must be deleted so only one pyterrier-basics exists"
     manifest = json.loads((out / "manifest.json").read_text())
     assert set(manifest) == {"fake-ext", "pyterrier-basics"}
-    assert manifest["fake-ext"] == {**manifest["fake-ext"], "package": "fakeext", "source": "fakeext 0.1", "overrides": False}
+    assert manifest["fake-ext"] == {**manifest["fake-ext"], "package": "fakeext", "source": "owner/fakeext@abc", "overrides": False}
     assert manifest["pyterrier-basics"]["overrides"] is True
     assert changes == {"added": ["fake-ext", "pyterrier-basics"], "changed": [], "removed": [],
                        "deleted": ["pyterrier-basics"], "overrides": ["pyterrier-basics"], "restore": []}
-    assert collector.installed_skills(collector.Extension("not_installed_pkg", "Missing", None)) == ([], "not installed")
 
-    again = run(own, "fakeext # Fake\n")  # the override is remembered after our copy is gone
+    again = run(own, ext_skill("pyterrier-basics"))  # the override is remembered after our copy is gone
     assert again["deleted"] == [] and again["overrides"] == ["pyterrier-basics"]
 
 
-def test_rerun_reports_changes_and_removes(site, own):
-    make_package(site, "fakeext", {"fake-ext": skill_md("fake-ext"), "gone": skill_md("gone"),
-                                   "pyterrier-basics": skill_md("pyterrier-basics")})
+def test_rerun_reports_changes_and_removes(own):
     out = own / "ext"
-    run(own, "fakeext # Fake\n")
+    run(own, ext_skill("fake-ext"), ext_skill("gone"), ext_skill("pyterrier-basics"))
 
-    (site / "fakeext" / "pt_skills" / "fake-ext" / "SKILL.md").write_text(skill_md("fake-ext", "New body.\n"))
-    shutil.rmtree(site / "fakeext" / "pt_skills" / "gone")
-    shutil.rmtree(site / "fakeext" / "pt_skills" / "pyterrier-basics")
-    changes = run(own, "fakeext # Fake\n")
+    changes = run(own, ext_skill("fake-ext", skill_md("fake-ext", "New body.\n")))
 
     assert changes["changed"] == ["fake-ext"] and changes["added"] == []
     assert changes["removed"] == ["gone", "pyterrier-basics"]
     assert changes["restore"] == ["pyterrier-basics"], "a dropped override must say ours needs restoring"
     assert not (out / "gone").exists()
-    assert run(own, "fakeext # Fake\n")["changed"] == []
+    assert run(own, ext_skill("fake-ext", skill_md("fake-ext", "New body.\n")))["changed"] == []
 
 
-def test_bad_skills_are_rejected_without_writing(site, own):
-    make_package(site, "fakeext", {"fake-ext": skill_md("wrong-name"), "pyterrier-basics": skill_md("pyterrier-basics")})
+def test_bad_skills_are_rejected_without_writing(own):
     with pytest.raises(SystemExit, match="must equal the folder name"):
-        run(own, "fakeext # Fake\n")
+        run(own, ext_skill("fake-ext", skill_md("wrong-name")), ext_skill("pyterrier-basics"))
     assert not (own / "ext").exists() and (own / "pyterrier-basics").exists()
 
     dup = collector.Skill("same", "a", "a 1", {"SKILL.md": skill_md("same").encode()})
@@ -127,6 +95,23 @@ def test_bad_skills_are_rejected_without_writing(site, own):
         collector.collect([dup, collector.Skill("same", "b", "b 1", dup.files)], own / "ext", own)
     with pytest.raises(SystemExit, match="must not be the skills/ folder"):
         collector.collect([dup], own, own)
+
+
+def test_list_snapshot_reports_added_and_removed(tmp_path):
+    first = "pkg_a # A <https://github.com/o/a>\npkg_b # B <https://github.com/o/b>\n"
+    assert collector.update_list_snapshot(first, tmp_path) == {"listed": ["pkg_a", "pkg_b"], "unlisted": []}
+    assert collector.update_list_snapshot(first, tmp_path) == {"listed": [], "unlisted": []}
+    second = "pkg_b # B <https://github.com/o/b>\npkg_c # C <https://github.com/o/c>\n"
+    assert collector.update_list_snapshot(second, tmp_path) == {"listed": ["pkg_c"], "unlisted": ["pkg_a"]}
+    assert (tmp_path / "extensions.txt").read_text() == second
+
+
+@pytest.mark.parametrize("text", ["", "\n\n", "<html>not the list</html>\n"])
+def test_broken_list_stops_the_run(tmp_path, text):
+    path = tmp_path / "extensions.txt"
+    path.write_text(text)
+    with pytest.raises(SystemExit, match="no extensions with a GitHub URL"):
+        collector.read_extensions(str(path))
 
 
 def test_skill_folders_finds_any_layout():

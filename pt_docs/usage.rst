@@ -10,7 +10,7 @@ folder (``.claude/skills/`` for Claude Code) and records the source in ``skills-
 .. code-block:: console
    :caption: Install all skills
 
-   $ npx skills add cmacdonald/pyterrier-skills --agent claude-code
+   $ npx skills add lionisakis/pyterrier-skills --agent claude-code
 
 .. list-table::
    :header-rows: 1
@@ -74,7 +74,7 @@ Troubleshooting
      - Fix
    * - ``npx skills check`` says "Local path, cannot be checked automatically"
      - installed from a checkout
-     - reinstall with ``npx skills add cmacdonald/pyterrier-skills``
+     - reinstall with ``npx skills add lionisakis/pyterrier-skills``
    * - install fails with an authentication error
      - no access to the GitHub repository
      - log in with ``gh auth login`` or set up git credentials for github.com
